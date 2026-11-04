@@ -1,0 +1,773 @@
+/* ════════════════════════════════════════════════════════════════════════
+   NNS v2 — cinematic command-center design system, dual theme.
+
+   LIGHT (base, default): pearl-slate daylight console — soft anti-glare
+   canvas, white cards with hairline borders + layered shadows, deep
+   charcoal ink, emerald #0f8a4d + security-navy #0d6e9e accents.
+   DARK (`:root[data-theme="dark"]`): the original deep ops-room.
+
+   Contract (mirrors production): light lives on bare :root, dark is an
+   explicit override, NO prefers-color-scheme anywhere — the inline
+   bootstrap + theme.ts own the attribute. Every recipe below reads
+   tokens only; never hardcode a theme color outside these two blocks.
+   ════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Muted pearl-slate, not bright white: comfortable for long sessions. */
+  --bg: #eef2f6;
+  --ink: #0f172a;
+  --dim: #42566a;
+  --faint: #74889b;
+  --emerald: #1b9e56;
+  --emerald-bright: #0f8a4d; /* "signal" accent (deeper on light for contrast) */
+  --ice: #0b628f; /* data accent — brand security navy, deepened to read on pearl */
+  --accent-rgb: 15, 138, 77;
+  --line: #cbd5e1; /* slate-300 — hairlines must read, not vanish */
+  --corner-alpha: 0.68;
+  /* Surfaces sit just above the canvas — no pure-white glare fields. */
+  --tile-bg: rgba(250, 251, 252, 0.88);
+  --tile-backdrop: blur(10px) saturate(1.12);
+  --tile-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 3px 8px rgba(15, 23, 42, 0.04),
+    0 16px 36px rgba(148, 163, 184, 0.3);
+  --panel-border: 1px solid #e2e8f0;
+  --panel-backdrop: blur(16px) saturate(1.1);
+  --panel-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 22px 48px rgba(148, 163, 184, 0.32);
+  --panel-grad-inline: linear-gradient(to left, rgba(250, 251, 253, 0.93), rgba(250, 251, 253, 0.62));
+  --panel-grad-block: linear-gradient(to bottom, rgba(250, 251, 253, 0.93), rgba(250, 251, 253, 0.62));
+  --callout-bg: rgba(250, 251, 253, 0.95);
+  --callout-border: 1px solid #cbd5e1;
+  --toggle-bg: rgba(250, 251, 253, 0.85);
+  --label-halo: 0 1px 10px rgba(238, 242, 246, 0.95);
+  --scan-line: rgba(13, 45, 74, 0.035);
+  --scan-blend: normal;
+  --h1-glow: drop-shadow(0 2px 16px rgba(15, 138, 77, 0.18));
+  --stat-glow: none;
+  --shield-glow: drop-shadow(0 1px 6px rgba(15, 138, 77, 0.35));
+  --tick-glow: 0 0 8px rgba(15, 138, 77, 0.45);
+  --sel-bg: rgba(27, 158, 86, 0.28);
+  --sel-ink: #06321c;
+  --scrollbar: rgba(15, 138, 77, 0.45);
+  /* Daylight atmosphere over the 3D render: emerald/navy radial tints +
+     a ground haze that seats the horizon. */
+  --atmo: radial-gradient(58% 46% at 84% 10%, rgba(15, 138, 77, 0.09), transparent 70%),
+    radial-gradient(52% 44% at 12% 86%, rgba(13, 75, 110, 0.1), transparent 72%),
+    linear-gradient(to top, rgba(238, 242, 246, 0.9), rgba(238, 242, 246, 0) 30%);
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+
+:root[data-theme="dark"] {
+  --bg: #020a12;
+  --ink: #eef6f9;
+  --dim: #8fa6b4;
+  --faint: #51687a;
+  --emerald-bright: #3fd98b;
+  --ice: #4fc3e8;
+  --accent-rgb: 63, 217, 139;
+  --line: rgba(143, 183, 203, 0.16);
+  --corner-alpha: 0.5;
+  --tile-bg: rgba(4, 18, 28, 0.55);
+  --tile-backdrop: none;
+  --tile-shadow: none;
+  --panel-border: 1px solid transparent;
+  --panel-backdrop: none;
+  --panel-shadow: none;
+  --atmo: none;
+  --panel-grad-inline: linear-gradient(to left, rgba(2, 13, 21, 0.82), rgba(2, 13, 21, 0.35));
+  --panel-grad-block: linear-gradient(to bottom, rgba(2, 13, 21, 0.82), rgba(2, 13, 21, 0.35));
+  --callout-bg: rgba(2, 14, 22, 0.9);
+  --callout-border: 1px solid rgba(63, 217, 139, 0.5);
+  --toggle-bg: rgba(4, 20, 30, 0.6);
+  --label-halo: 0 2px 10px rgba(2, 10, 18, 0.9);
+  --scan-line: rgba(255, 255, 255, 0.022);
+  --scan-blend: overlay;
+  --h1-glow: drop-shadow(0 0 28px rgba(63, 217, 139, 0.28));
+  --stat-glow: 0 0 18px rgba(63, 217, 139, 0.45);
+  --shield-glow: drop-shadow(0 0 10px rgba(63, 217, 139, 0.5));
+  --tick-glow: 0 0 10px rgba(63, 217, 139, 0.8);
+  --sel-bg: rgba(27, 158, 86, 0.45);
+  --sel-ink: #ecfdf5;
+  --scrollbar: rgba(63, 217, 139, 0.4);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  color-scheme: light;
+  scrollbar-color: var(--scrollbar) transparent;
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "IBM Plex Sans Arabic", Tahoma, system-ui, sans-serif;
+  overflow-x: clip;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.35s ease, color 0.35s ease;
+}
+
+::selection {
+  background: var(--sel-bg);
+  color: var(--sel-ink);
+}
+
+.mono {
+  font-family: var(--mono);
+  letter-spacing: 0.16em;
+  direction: ltr;
+}
+
+/* ── Layers ─────────────────────────────────────────────────────────────
+   stage (canvas, fixed, z0) → sections (scroll, z10) → hud (fixed, z30)
+   → theme toggle (z40). drei <Html> portals clamp to z 11–20.           */
+
+.stage {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
+/* Atmospheric wash painted over the WebGL frame (inside .stage, so it sits
+   under all DOM). Daylight gets brand-tinted radials + ground haze; the
+   dark ops room sets --atmo: none and keeps its raw render. */
+.stage-atmo {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--atmo);
+}
+
+.sections {
+  position: relative;
+  z-index: 10;
+  pointer-events: none; /* copy floats over the scene; links re-enable below */
+}
+
+.sections a {
+  pointer-events: auto;
+}
+
+.hud {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+
+/* Film grain / scanline wash — white-on-dark in the ops room, a whisper of
+   navy paper grain in daylight. */
+.hud::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--scan-line) 0,
+    var(--scan-line) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  mix-blend-mode: var(--scan-blend);
+}
+
+/* ── HUD chrome ───────────────────────────────────────────────────────── */
+
+.frame-corner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid rgba(var(--accent-rgb), var(--corner-alpha));
+}
+.frame-corner.tl { top: 14px; left: 14px; border-right: 0; border-bottom: 0; }
+.frame-corner.tr { top: 14px; right: 14px; border-left: 0; border-bottom: 0; }
+.frame-corner.bl { bottom: 14px; left: 14px; border-right: 0; border-top: 0; }
+.frame-corner.br { bottom: 14px; right: 14px; border-left: 0; border-top: 0; }
+
+.hud-brand {
+  position: absolute;
+  top: 26px;
+  inset-inline-start: 42px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hud-shield {
+  width: 30px;
+  height: 30px;
+  color: var(--emerald-bright);
+  filter: var(--shield-glow);
+}
+.hud-shield svg { width: 100%; height: 100%; }
+
+.hud-brand-name {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.hud-brand-en {
+  font-size: 9px;
+  color: var(--faint);
+  padding-top: 3px;
+}
+
+.hud-phase {
+  position: absolute;
+  top: 28px;
+  inset-inline-end: 42px;
+  text-align: end;
+  display: grid;
+  gap: 2px;
+}
+.hud-phase .mono {
+  font-size: 10px;
+  color: var(--emerald-bright);
+}
+.hud-phase span:last-child {
+  font-size: 13px;
+  color: var(--dim);
+}
+
+.hud-rail {
+  position: absolute;
+  inset-inline-end: 24px;
+  top: 50%;
+  translate: 0 -50%;
+  height: min(42vh, 360px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.hud-rail-track {
+  position: absolute;
+  inset: 0;
+  margin-inline: auto;
+  width: 1px;
+  background: var(--line);
+}
+
+.hud-rail-fill {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, var(--emerald-bright), var(--ice));
+  transform-origin: top;
+  transform: scaleY(0);
+}
+
+.hud-tick {
+  position: relative;
+  z-index: 1;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid var(--faint);
+  background: var(--bg);
+  transition: all 0.4s ease;
+}
+.hud-tick.active {
+  border-color: var(--emerald-bright);
+  background: var(--emerald-bright);
+  box-shadow: var(--tick-glow);
+}
+
+.hud-cue {
+  position: absolute;
+  bottom: 34px;
+  left: 50%;
+  translate: -50% 0;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--dim);
+}
+.hud-cue .mono { font-size: 9px; color: var(--faint); }
+.cue-line {
+  width: 1px;
+  height: 34px;
+  background: linear-gradient(to bottom, var(--emerald-bright), transparent);
+  animation: cue 1.8s ease-in-out infinite;
+}
+@keyframes cue {
+  0% { transform: scaleY(0); transform-origin: top; }
+  45% { transform: scaleY(1); transform-origin: top; }
+  55% { transform: scaleY(1); transform-origin: bottom; }
+  100% { transform: scaleY(0); transform-origin: bottom; }
+}
+
+.hud-exp {
+  position: absolute;
+  bottom: 18px;
+  inset-inline-start: 42px;
+  font-size: 9px;
+  color: var(--faint);
+}
+
+/* ── Corner controls: theme + language toggles (above the HUD) ────────── */
+
+.theme-toggle,
+.lang-toggle {
+  position: fixed;
+  z-index: 40;
+  inset-inline-end: 34px;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: var(--toggle-bg);
+  backdrop-filter: blur(10px);
+  color: var(--ink);
+  box-shadow: var(--tile-shadow);
+  transition: border-color 0.3s ease, background 0.3s ease, transform 0.3s ease;
+}
+.theme-toggle { top: 78px; }
+.lang-toggle { top: 130px; }
+.lang-toggle .mono {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+.theme-toggle:hover,
+.lang-toggle:hover {
+  border-color: rgba(var(--accent-rgb), 0.55);
+  transform: translateY(-1px);
+}
+.theme-toggle:focus-visible,
+.lang-toggle:focus-visible {
+  outline: 2px solid var(--emerald-bright);
+  outline-offset: 3px;
+}
+.theme-toggle .icon {
+  grid-area: 1 / 1;
+  width: 19px;
+  height: 19px;
+  transition: opacity 0.3s ease, transform 0.45s ease;
+}
+.theme-toggle .icon-sun { opacity: 1; transform: rotate(0deg) scale(1); }
+.theme-toggle .icon-moon { opacity: 0; transform: rotate(-45deg) scale(0.6); }
+:root[data-theme="dark"] .theme-toggle .icon-sun { opacity: 0; transform: rotate(45deg) scale(0.6); }
+:root[data-theme="dark"] .theme-toggle .icon-moon { opacity: 1; transform: rotate(0deg) scale(1); }
+
+/* Cross-fade veil: masks the single-frame WebGL palette swap so a theme
+   switch reads as one buttery wash in the TARGET canvas color. */
+.theme-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.16s ease-in;
+}
+.theme-veil.on { opacity: 1; }
+.theme-veil.off { transition: opacity 0.32s ease-out; }
+
+/* ── 3D-anchored labels (drei Html) ───────────────────────────────────── */
+
+.callout {
+  display: grid;
+  gap: 3px;
+  padding: 8px 12px;
+  /* Slate hairline + emerald spine in daylight; emerald frame in the dark. */
+  border: var(--callout-border);
+  border-inline-start: 3px solid var(--emerald-bright);
+  background: var(--callout-bg);
+  backdrop-filter: var(--tile-backdrop);
+  box-shadow: var(--tile-shadow);
+  min-width: 170px;
+  opacity: 0;
+  pointer-events: none;
+}
+.callout-en {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--emerald-bright);
+  direction: ltr;
+  text-align: start;
+}
+.callout-ar {
+  font-size: 12px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.callout-spec {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  color: var(--faint);
+  direction: ltr;
+  text-align: start;
+  border-top: 1px dashed var(--line);
+  padding-top: 5px;
+  margin-top: 2px;
+}
+
+.city-label {
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  opacity: 0;
+  pointer-events: none;
+  text-shadow: var(--label-halo);
+}
+.city-ar { font-size: 15px; font-weight: 600; }
+.city-en {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.3em;
+  color: var(--ice);
+}
+
+/* ── Narrative sections ───────────────────────────────────────────────── */
+
+.section {
+  position: relative;
+  min-height: 150vh;
+}
+.section-hero { min-height: 135vh; }
+.section-outro { min-height: auto; }
+
+.sticky-inner {
+  position: sticky;
+  top: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  padding: 0 clamp(20px, 7vw, 110px);
+}
+
+.hero-block {
+  max-width: 760px;
+  margin-top: -4vh;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--emerald-bright);
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  background: rgba(27, 158, 86, 0.1);
+  padding: 7px 14px;
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+}
+.eyebrow-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--emerald-bright);
+  box-shadow: 0 0 10px var(--emerald-bright);
+  animation: blink 1.6s ease-in-out infinite;
+}
+@keyframes blink { 50% { opacity: 0.3; } }
+
+h1 {
+  margin-top: 26px;
+  font-size: clamp(42px, 7.4vw, 104px);
+  line-height: 1.12;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  display: grid;
+}
+/* Latin copy runs much longer than the dense Arabic taglines — English
+   gets its own, smaller type ramp so headlines stay composed, not walls. */
+html[lang="en"] h1 {
+  font-size: clamp(32px, 5vw, 70px);
+  letter-spacing: -0.02em;
+  line-height: 1.08;
+}
+html[lang="en"] .hero-block { max-width: 900px; }
+html[lang="en"] h2 { font-size: clamp(26px, 3.6vw, 46px); }
+html[lang="en"] .outro-inner h2 { font-size: clamp(25px, 3.2vw, 42px); }
+h1 .accent {
+  background: linear-gradient(100deg, var(--emerald-bright), var(--ice));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: var(--h1-glow);
+}
+
+.sub {
+  margin-top: 22px;
+  max-width: 540px;
+  font-size: clamp(15px, 1.6vw, 18px);
+  line-height: 1.9;
+  color: var(--dim);
+}
+
+.copy-block {
+  max-width: 560px;
+  padding: 26px 30px;
+  border: var(--panel-border);
+  border-inline-start: 2px solid rgba(var(--accent-rgb), 0.5);
+  background: var(--panel-grad-inline);
+  /* Frost is LIGHT-only (token): a near-opaque white card turns whatever
+     passes beneath into a soft wash — intentional glass. Dark keeps
+     backdrop OFF because its translucent gradient would smear the 3D
+     callouts into mush (learned the hard way). */
+  backdrop-filter: var(--panel-backdrop);
+  box-shadow: var(--panel-shadow);
+}
+.copy-block.end { margin-inline-start: auto; }
+.copy-block.center {
+  margin-inline: auto;
+  text-align: center;
+  border: var(--panel-border);
+  border-top: 2px solid rgba(var(--accent-rgb), 0.5);
+  background: var(--panel-grad-block);
+  max-width: 820px;
+}
+
+.kicker {
+  font-size: 10.5px;
+  color: var(--emerald-bright);
+}
+
+h2 {
+  margin-top: 14px;
+  font-size: clamp(30px, 4.4vw, 56px);
+  line-height: 1.22;
+  font-weight: 700;
+}
+
+.lead {
+  margin-top: 16px;
+  font-size: clamp(14.5px, 1.5vw, 17px);
+  line-height: 1.95;
+  color: var(--dim);
+}
+
+/* Stats */
+.stats {
+  margin-top: 34px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px;
+}
+.stat {
+  display: grid;
+  gap: 5px;
+  padding: 18px 10px 14px;
+  border: 1px solid var(--line);
+  background: var(--tile-bg);
+  backdrop-filter: var(--tile-backdrop);
+  box-shadow: var(--tile-shadow);
+  position: relative;
+}
+.stat::before,
+.stat::after {
+  content: "";
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid rgba(var(--accent-rgb), 0.6);
+}
+.stat::before { top: -1px; inset-inline-start: -1px; border-bottom: 0; border-inline-end: 0; }
+.stat::after { bottom: -1px; inset-inline-end: -1px; border-top: 0; border-inline-start: 0; }
+.stat-value {
+  font-size: clamp(26px, 3vw, 38px);
+  font-weight: 600;
+  color: var(--emerald-bright);
+  text-shadow: var(--stat-glow);
+}
+.stat-ar { font-size: 13px; color: var(--ink); }
+.stat-en { font-size: 8.5px; color: var(--faint); }
+
+/* AI chips */
+.ai-groups { margin-top: 26px; display: grid; gap: 22px; }
+.ai-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.ai-title .mono {
+  font-size: 9px;
+  color: var(--ice);
+  margin-inline-start: 8px;
+}
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  font-size: 12.5px;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  background: var(--tile-bg);
+  backdrop-filter: var(--tile-backdrop);
+  box-shadow: var(--tile-shadow);
+  padding: 6px 12px;
+  border-radius: 999px;
+}
+.chip::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--emerald-bright);
+  margin-inline-end: 7px;
+  vertical-align: 2px;
+}
+
+/* ── Outro ────────────────────────────────────────────────────────────── */
+
+.section-outro { pointer-events: auto; }
+
+.outro-inner {
+  min-height: 100vh;
+  padding: 18vh clamp(20px, 7vw, 110px) 60px;
+  max-width: 1200px;
+  margin-inline: auto;
+  display: grid;
+  align-content: start;
+  gap: 18px;
+}
+.outro-inner h2 { font-size: clamp(30px, 4vw, 52px); }
+
+.domains {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+}
+/* Photo cards are a committed dark micro-context in BOTH themes: the scrim
+   stays dark so the imagery reads, so their text is pinned, not tokened. */
+.domain {
+  position: relative;
+  min-height: 228px;
+  padding: 18px;
+  display: grid;
+  align-content: end;
+  gap: 4px;
+  background-size: cover;
+  background-position: center;
+  border: 1px solid var(--line);
+  box-shadow: var(--tile-shadow);
+  overflow: hidden;
+  color: #f4f8fa;
+  transition: border-color 0.3s ease, transform 0.3s ease;
+}
+.domain:hover {
+  border-color: rgba(var(--accent-rgb), 0.6);
+  transform: translateY(-4px);
+}
+.domain-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(2, 10, 17, 0.93), rgba(2, 10, 17, 0.35));
+}
+.domain > :not(.domain-scrim) { position: relative; }
+.domain-count {
+  font-size: 11px;
+  color: #3fd98b;
+}
+.domain-name { font-size: 19px; font-weight: 700; }
+.domain-en { font-size: 9px; color: rgba(222, 236, 242, 0.8); }
+/* Example solutions per domain (pinned light-on-scrim like the card text). */
+.domain-list {
+  list-style: none;
+  display: grid;
+  gap: 3px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(222, 236, 242, 0.25);
+  font-size: 11px;
+  color: rgba(222, 236, 242, 0.88);
+}
+.domain-list li::before {
+  content: "·";
+  color: #3fd98b;
+  font-weight: 700;
+  margin-inline-end: 6px;
+}
+
+.licenses {
+  margin-top: 16px;
+  font-size: 12.5px;
+  color: var(--faint);
+}
+
+.contact {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.contact-item {
+  display: grid;
+  gap: 4px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  background: var(--tile-bg);
+  backdrop-filter: var(--tile-backdrop);
+  box-shadow: var(--tile-shadow);
+  color: var(--ink);
+  text-decoration: none;
+  transition: border-color 0.3s ease, background 0.3s ease;
+}
+.contact-item:hover {
+  border-color: rgba(var(--accent-rgb), 0.65);
+  background: rgba(27, 158, 86, 0.08);
+}
+.contact-item .mono {
+  font-size: 15px;
+  color: var(--emerald-bright);
+}
+.contact-item span:last-child { font-size: 12px; color: var(--dim); }
+
+.footer {
+  margin-top: 40px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--faint);
+}
+.footer .mono { font-size: 9px; }
+
+/* Focus visibility for the interactive outro */
+a:focus-visible {
+  outline: 2px solid var(--emerald-bright);
+  outline-offset: 3px;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────── */
+
+@media (max-width: 760px) {
+  .hud-brand { inset-inline-start: 22px; }
+  .hud-brand-en { display: none; }
+  .hud-phase { inset-inline-end: 22px; }
+  .hud-rail { display: none; }
+  .theme-toggle { top: 70px; inset-inline-end: 20px; }
+  .lang-toggle { top: 120px; inset-inline-end: 20px; }
+  .copy-block,
+  .copy-block.end { margin-inline: 0; max-width: 100%; }
+  .section { min-height: 140vh; }
+}
+
+/* ── Reduced motion: everything readable, nothing required to move ───── */
+
+@media (prefers-reduced-motion: reduce) {
+  .cue-line,
+  .eyebrow-dot { animation: none; }
+  .reveal { opacity: 1 !important; transform: none !important; visibility: visible !important; }
+  .hud-cue { display: none; }
+  body,
+  .theme-toggle,
+  .lang-toggle,
+  .theme-toggle .icon { transition: none; }
+}

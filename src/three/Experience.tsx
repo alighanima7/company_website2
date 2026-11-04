@@ -1,0 +1,248 @@
+import { Grid, Sparkles } from "@react-three/drei";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Bloom, EffectComposer, Vignette } from "@react-three/postprocessing";
+import { useEffect, useMemo } from "react";
+import type { JSX } from "react";
+import * as THREE from "three";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+
+import { PHASES } from "../content";
+import { clamp01, dampScroll, lerp, scrollState } from "../scroll";
+import { getTheme, SCENE, useTheme } from "../theme";
+import { Collar3D } from "./Collar3D";
+import { KsaMap3D } from "./KsaMap3D";
+import { Tracker } from "./Tracker";
+
+/**
+ * Scene orchestration: one fixed full-viewport canvas behind the DOM, a
+ * keyframed camera flown by the damped scroll value, studio-ish IBL from
+ * three's bundled RoomEnvironment (no network HDR fetch), and bloom/vignette
+ * only where the device can afford it.
+ */
+
+interface CamKey {
+  p: number; // mutable: re-anchored to the live PHASES every frame
+  readonly pos: readonly [number, number, number];
+  readonly look: readonly [number, number, number];
+}
+
+/** The whole film, as eight camera marks. The `p` of the six middle marks
+ *  is re-derived from the runtime-synced PHASES so the cuts always land on
+ *  the narrative beats, whatever the real section geometry turns out to be.
+ *  Marks 3–4 are the collar act: a close right-hand orbit, then a low pass
+ *  to the other side while the scrubbed turn presents the teardown. */
+const CAM_KEYS: readonly CamKey[] = [
+  { p: 0.0, pos: [0, 0.55, 7.6], look: [0, 0.2, 0] },
+  { p: 0.15, pos: [2.8, 1.35, 5.5], look: [0, 0.12, 0] },
+  { p: 0.35, pos: [-3.6, 1.75, 5.8], look: [0, 0.4, 0] },
+  { p: 0.44, pos: [3.1, 1.0, 4.4], look: [0, 0.1, 0] },
+  { p: 0.55, pos: [-2.7, 0.8, 4.9], look: [0, 0.05, 0] },
+  { p: 0.7, pos: [0, 6.8, 10.4], look: [0, -0.7, 0] },
+  { p: 0.87, pos: [-6.6, 4.7, 7.0], look: [0, -0.95, 0] },
+  { p: 1.0, pos: [0.6, 2.5, 12.2], look: [0, -0.55, 0] },
+];
+
+function syncCamKeys(): void {
+  const k1 = CAM_KEYS[1];
+  const k2 = CAM_KEYS[2];
+  const k3 = CAM_KEYS[3];
+  const k4 = CAM_KEYS[4];
+  const k5 = CAM_KEYS[5];
+  const k6 = CAM_KEYS[6];
+  if (k1) k1.p = PHASES.heroEnd * 0.85;
+  if (k2) k2.p = lerp(PHASES.heroEnd, PHASES.teardownEnd, 0.85);
+  if (k3) k3.p = lerp(PHASES.teardownEnd, PHASES.collarEnd, 0.3);
+  if (k4) k4.p = lerp(PHASES.teardownEnd, PHASES.collarEnd, 0.85);
+  if (k5) k5.p = lerp(PHASES.collarEnd, PHASES.networkEnd, 0.6);
+  if (k6) k6.p = lerp(PHASES.networkEnd, PHASES.aiEnd, 0.55);
+}
+
+const POS = new THREE.Vector3();
+const LOOK = new THREE.Vector3();
+
+function sampleCamera(p: number, outPos: THREE.Vector3, outLook: THREE.Vector3): void {
+  const last = CAM_KEYS[CAM_KEYS.length - 1] as CamKey;
+  let a: CamKey = CAM_KEYS[0] as CamKey;
+  let b: CamKey = last;
+  for (let i = 0; i < CAM_KEYS.length - 1; i += 1) {
+    const k0 = CAM_KEYS[i] as CamKey;
+    const k1 = CAM_KEYS[i + 1] as CamKey;
+    if (p >= k0.p && p <= k1.p) {
+      a = k0;
+      b = k1;
+      break;
+    }
+  }
+  const span = Math.max(1e-5, b.p - a.p);
+  const t0 = clamp01((p - a.p) / span);
+  // Smootherstep keeps each cut gentle at both ends of its segment.
+  const t = t0 * t0 * t0 * (t0 * (t0 * 6 - 15) + 10);
+  outPos.set(lerp(a.pos[0], b.pos[0], t), lerp(a.pos[1], b.pos[1], t), lerp(a.pos[2], b.pos[2], t));
+  outLook.set(
+    lerp(a.look[0], b.look[0], t),
+    lerp(a.look[1], b.look[1], t),
+    lerp(a.look[2], b.look[2], t),
+  );
+}
+
+function CameraRig(): null {
+  const camera = useThree((s) => s.camera);
+
+  useFrame((state, dt) => {
+    syncCamKeys();
+    const restPose = (PHASES.collarEnd + PHASES.networkEnd) / 2;
+    const p = scrollState.reduced ? restPose : dampScroll(Math.min(dt, 0.05));
+    sampleCamera(p, POS, LOOK);
+    // A breath of parallax from the pointer keeps held frames alive.
+    const px = state.pointer.x * 0.25;
+    const py = state.pointer.y * 0.15;
+    camera.position.set(POS.x + px, POS.y - py, POS.z);
+    camera.lookAt(LOOK);
+  });
+
+  return null;
+}
+
+/** Bundled-asset IBL: PMREM from RoomEnvironment — zero network, real PBR.
+ *  Also owns everything atmospheric that must follow the theme: clear color,
+ *  fog and environment intensity. */
+function StudioEnvironment(): null {
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  const mode = useTheme();
+
+  useEffect(() => {
+    const pmrem = new THREE.PMREMGenerator(gl);
+    const env = pmrem.fromScene(new RoomEnvironment(), 0.04);
+    scene.environment = env.texture;
+    return () => {
+      scene.environment = null;
+      env.texture.dispose();
+      pmrem.dispose();
+    };
+  }, [gl, scene]);
+
+  useEffect(() => {
+    const p = SCENE[mode];
+    gl.setClearColor(p.canvas, 1);
+    // ACES filmic keeps metals and emissives in range; daylight runs a
+    // hotter exposure so the alloy stays punchy instead of washing flat.
+    gl.toneMapping = THREE.ACESFilmicToneMapping;
+    gl.toneMappingExposure = p.exposure;
+    scene.environmentIntensity = p.envIntensity;
+    scene.fog = new THREE.FogExp2(p.fog, p.fogDensity);
+  }, [gl, scene, mode]);
+
+  return null;
+}
+
+export function Experience(): JSX.Element {
+  const mode = useTheme();
+  const p = SCENE[mode];
+
+  const effectsOn = useMemo(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(pointer: fine)").matches &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    [],
+  );
+
+  return (
+    <div className="stage" aria-hidden="true">
+      <Canvas
+        dpr={[1, 2]}
+        shadows
+        camera={{ fov: 42, near: 0.1, far: 70, position: [0, 0.55, 7.6] }}
+        gl={{ antialias: true, powerPreference: "high-performance" }}
+        onCreated={({ gl }) => {
+          gl.setClearColor(SCENE[getTheme()].canvas, 1);
+        }}
+      >
+        <StudioEnvironment />
+        <CameraRig />
+
+        {/* Key / rim / fill / hemisphere — per-theme. Daylight gets a crisp
+            white key + silver-blue ambient dome for rich speculars on the
+            navy metal; the ops room keeps its moody three-point rig. The key
+            casts real shadows in daylight. PERF: plain PCF + 1K map, NOT
+            "soft"/2K — PCFSoft over a screen-filling catcher cratered
+            integrated GPUs to ~1fps (measured). */}
+        <directionalLight
+          position={[4, 6, 5]}
+          intensity={p.keyIntensity}
+          color={p.keyColor}
+          castShadow={p.shadows}
+          shadow-mapSize={[1024, 1024]}
+          shadow-camera-left={-10}
+          shadow-camera-right={10}
+          shadow-camera-top={10}
+          shadow-camera-bottom={-10}
+          shadow-camera-near={1}
+          shadow-camera-far={40}
+          shadow-bias={-0.0004}
+          shadow-normalBias={0.03}
+        />
+        <directionalLight position={[-6, 3, -4]} intensity={p.rimIntensity} color={p.rimColor} />
+        <pointLight position={[0, -2.5, 3]} intensity={p.fillIntensity} color={p.fillColor} />
+        {p.hemiIntensity > 0 && (
+          <hemisphereLight args={[p.hemiSky, p.hemiGround, p.hemiIntensity]} />
+        )}
+
+        {/* Daylight grounding: an invisible catcher plane that renders ONLY
+            the key light's shadow — crisp directional grounding under the
+            device, its exploded parts and the Kingdom slab. (The glow pool
+            plays this role in the dark theme.) */}
+        {p.shadows && (
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.615, 0]} receiveShadow>
+            {/* Sized to the shadow frustum — a bigger plane only adds
+                shadow-sampling fragments, never more shadow. */}
+            <planeGeometry args={[36, 36]} />
+            <shadowMaterial transparent opacity={p.shadowOpacity} color={p.shadowColor} />
+          </mesh>
+        )}
+
+        {/* Command-floor grid, far below the hero object. */}
+        <Grid
+          position={[0, -1.62, 0]}
+          args={[40, 40]}
+          cellSize={0.8}
+          cellThickness={p.gridCellThickness}
+          cellColor={p.gridCell}
+          sectionSize={4}
+          sectionThickness={p.gridSectionThickness}
+          sectionColor={p.gridSection}
+          fadeDistance={30}
+          fadeStrength={2.4}
+          infiniteGrid
+        />
+
+        {/* Ambient data motes (remounted per theme — color is a shader uniform). */}
+        <Sparkles key={`a-${mode}`} count={120} scale={[20, 9, 16]} size={1.6} speed={0.16} opacity={p.sparkOpacityA} color={p.sparkA} />
+        <Sparkles key={`b-${mode}`} count={70} scale={[16, 7, 12]} size={1.1} speed={0.1} opacity={p.sparkOpacityB} color={p.sparkB} />
+
+        <Tracker />
+        <Collar3D />
+        <KsaMap3D />
+
+        {/* Bloom belongs to the dark ops room only: on a light canvas the
+            whole frame crosses the luminance threshold and hazes over. */}
+        {effectsOn &&
+          (p.bloom ? (
+            <EffectComposer key={mode}>
+              <Bloom mipmapBlur intensity={0.85} luminanceThreshold={0.22} luminanceSmoothing={0.2} />
+              <Vignette eskil={false} offset={p.vignetteOffset} darkness={p.vignetteDarkness} />
+            </EffectComposer>
+          ) : (
+            <EffectComposer key={mode}>
+              <Vignette eskil={false} offset={p.vignetteOffset} darkness={p.vignetteDarkness} />
+            </EffectComposer>
+          ))}
+      </Canvas>
+
+      {/* Atmospheric wash over the render — emerald/navy radials + ground
+          haze in daylight, nothing in the dark ops room (tokens in CSS). */}
+      <div className="stage-atmo" />
+    </div>
+  );
+}

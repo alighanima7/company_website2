@@ -19,9 +19,10 @@ function phaseIndex(p: number): number {
   if (p < PHASES.heroEnd) return 0;
   if (p < PHASES.teardownEnd) return 1;
   if (p < PHASES.collarEnd) return 2;
-  if (p < PHASES.networkEnd) return 3;
-  if (p < PHASES.aiEnd) return 4;
-  return 5;
+  if (p < PHASES.cityEnd) return 3;
+  if (p < PHASES.networkEnd) return 4;
+  if (p < PHASES.aiEnd) return 5;
+  return 6;
 }
 
 export function Hud(): JSX.Element {

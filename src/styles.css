@@ -1,10 +1,12 @@
 /* ════════════════════════════════════════════════════════════════════════
-   NNS v2 — cinematic command-center design system, dual theme.
+   NNS v2 — cinematic command-center design system, dual warm theme.
 
-   LIGHT (base, default): pearl-slate daylight console — soft anti-glare
-   canvas, white cards with hairline borders + layered shadows, deep
-   charcoal ink, emerald #0f8a4d + security-navy #0d6e9e accents.
-   DARK (`:root[data-theme="dark"]`): the original deep ops-room.
+   LIGHT (base, default): warm earthy daylight — Warm Beige #F4EBE1
+   canvas, White #FFFFFF cards, Sage #2F5233 headings/accents, Dark
+   Brown #3E332E text, Terracotta #C87A53 CTAs.
+   DARK (`:root[data-theme="dark"]`): warm luxury night — Brown-Gray
+   #1E1A17 canvas, Dark Beige #2A2420 cards, Bright Sage #6B8E6F
+   headings/accents, Ivory #EAE5E0 text, Bright Terracotta #DD8D65 CTAs.
 
    Contract (mirrors production): light lives on bare :root, dark is an
    explicit override, NO prefers-color-scheme anywhere — the inline
@@ -13,80 +15,94 @@
    ════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  /* Muted pearl-slate, not bright white: comfortable for long sessions. */
-  --bg: #eef2f6;
-  --ink: #0f172a;
-  --dim: #42566a;
-  --faint: #74889b;
+  /* ── Light = the warm earthy 5-color system ─────────────────────────
+     Warm Beige #F4EBE1 canvas · Base White #FFFFFF cards · Sage Green
+     #2F5233 headings & brand accents · Dark Brown #3E332E body text ·
+     Warm Terracotta #C87A53 CTAs, links & attention. No pure-white
+     fields, no cold slate — gentle for extended viewing.              */
+  --bg: #f4ebe1;
+  --ink: #3e332e; /* dark brown — all body text */
+  --dim: #6b5d52;
+  --faint: #94857a;
+  --heading: #2f5233; /* sage — major headings & identity */
   --emerald: #1b9e56;
-  --emerald-bright: #0f8a4d; /* "signal" accent (deeper on light for contrast) */
-  --ice: #0b628f; /* data accent — brand security navy, deepened to read on pearl */
-  --accent-rgb: 15, 138, 77;
-  --line: #cbd5e1; /* slate-300 — hairlines must read, not vanish */
+  --emerald-bright: #2f5233; /* "signal" accent = sage in daylight */
+  --ice: #c87a53; /* data accent slot = warm terracotta */
+  --accent-rgb: 47, 82, 51;
+  --cta: #c87a53; /* terracotta — CTAs, interactive links, attention */
+  --cta-rgb: 200, 122, 83;
+  --accent-soft-bg: rgba(47, 82, 51, 0.07);
+  --line: #d9ccbe; /* warm hairline — delicate but present on beige */
   --corner-alpha: 0.68;
-  /* Surfaces sit just above the canvas — no pure-white glare fields. */
-  --tile-bg: rgba(250, 251, 252, 0.88);
-  --tile-backdrop: blur(10px) saturate(1.12);
-  --tile-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 3px 8px rgba(15, 23, 42, 0.04),
-    0 16px 36px rgba(148, 163, 184, 0.3);
-  --panel-border: 1px solid #e2e8f0;
-  --panel-backdrop: blur(16px) saturate(1.1);
-  --panel-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 22px 48px rgba(148, 163, 184, 0.32);
-  --panel-grad-inline: linear-gradient(to left, rgba(250, 251, 253, 0.93), rgba(250, 251, 253, 0.62));
-  --panel-grad-block: linear-gradient(to bottom, rgba(250, 251, 253, 0.93), rgba(250, 251, 253, 0.62));
-  --callout-bg: rgba(250, 251, 253, 0.95);
-  --callout-border: 1px solid #cbd5e1;
-  --toggle-bg: rgba(250, 251, 253, 0.85);
-  --label-halo: 0 1px 10px rgba(238, 242, 246, 0.95);
-  --scan-line: rgba(13, 45, 74, 0.035);
+  /* Base-white cards floating on the beige canvas — firm enough that text
+     never competes with the 3D models beneath. */
+  --tile-bg: rgba(255, 255, 255, 0.92);
+  --tile-backdrop: blur(10px) saturate(1.08);
+  --tile-shadow: 0 1px 2px rgba(62, 51, 46, 0.06), 0 3px 8px rgba(62, 51, 46, 0.05),
+    0 16px 36px rgba(168, 148, 130, 0.28);
+  --panel-border: 1px solid #e2d6c8;
+  --panel-backdrop: blur(16px) saturate(1.06);
+  --panel-shadow: 0 1px 2px rgba(62, 51, 46, 0.05), 0 22px 48px rgba(168, 148, 130, 0.3);
+  --panel-grad-inline: linear-gradient(to left, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.64));
+  --panel-grad-block: linear-gradient(to bottom, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.64));
+  --callout-bg: rgba(255, 255, 255, 0.97);
+  --callout-border: 1px solid #d9ccbe;
+  --toggle-bg: rgba(255, 255, 255, 0.85);
+  --label-halo: 0 1px 10px rgba(244, 235, 225, 0.95);
+  /* Clean-studio light: no scanline texture — unbroken beige canvas. */
+  --scan-line: transparent;
   --scan-blend: normal;
-  --h1-glow: drop-shadow(0 2px 16px rgba(15, 138, 77, 0.18));
+  --h1-glow: drop-shadow(0 2px 16px rgba(47, 82, 51, 0.16));
   --stat-glow: none;
-  --shield-glow: drop-shadow(0 1px 6px rgba(15, 138, 77, 0.35));
-  --tick-glow: 0 0 8px rgba(15, 138, 77, 0.45);
-  --sel-bg: rgba(27, 158, 86, 0.28);
-  --sel-ink: #06321c;
-  --scrollbar: rgba(15, 138, 77, 0.45);
-  /* Daylight atmosphere over the 3D render: emerald/navy radial tints +
-     a ground haze that seats the horizon. */
-  --atmo: radial-gradient(58% 46% at 84% 10%, rgba(15, 138, 77, 0.09), transparent 70%),
-    radial-gradient(52% 44% at 12% 86%, rgba(13, 75, 110, 0.1), transparent 72%),
-    linear-gradient(to top, rgba(238, 242, 246, 0.9), rgba(238, 242, 246, 0) 30%);
+  --shield-glow: drop-shadow(0 1px 6px rgba(47, 82, 51, 0.35));
+  --tick-glow: 0 0 8px rgba(47, 82, 51, 0.45);
+  --sel-bg: rgba(200, 122, 83, 0.3);
+  --sel-ink: #3e332e;
+  --scrollbar: rgba(47, 82, 51, 0.45);
   --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
 }
 
 :root[data-theme="dark"] {
-  --bg: #020a12;
-  --ink: #eef6f9;
-  --dim: #8fa6b4;
-  --faint: #51687a;
-  --emerald-bright: #3fd98b;
-  --ice: #4fc3e8;
-  --accent-rgb: 63, 217, 139;
-  --line: rgba(143, 183, 203, 0.16);
-  --corner-alpha: 0.5;
-  --tile-bg: rgba(4, 18, 28, 0.55);
+  /* ── Dark = the warm luxury tactical system ─────────────────────────
+     Dark Brownish-Gray #1E1A17 canvas (no stark black) · Dark Beige
+     #2A2420 cards & containers · Bright Sage #6B8E6F headings & brand
+     accents · Ivory #EAE5E0 body text (no halation) · Bright Terracotta
+     #DD8D65 CTAs, interactive highlights & attention.                  */
+  --bg: #1e1a17;
+  --ink: #eae5e0; /* ivory — all body text */
+  --dim: #b3a89d;
+  --faint: #857b70;
+  --heading: #6b8e6f; /* bright sage — major titles & identity */
+  --emerald-bright: #6b8e6f; /* "signal" accent = bright sage */
+  --ice: #dd8d65; /* data accent slot = bright terracotta */
+  --accent-rgb: 107, 142, 111;
+  --cta: #dd8d65;
+  --cta-rgb: 221, 141, 101;
+  --accent-soft-bg: rgba(107, 142, 111, 0.12);
+  --line: rgba(234, 229, 224, 0.13);
+  --corner-alpha: 0.6;
+  /* Dark-beige cards floating on the brown-gray canvas. */
+  --tile-bg: rgba(42, 36, 32, 0.88);
   --tile-backdrop: none;
-  --tile-shadow: none;
-  --panel-border: 1px solid transparent;
+  --tile-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 30px rgba(0, 0, 0, 0.35);
+  --panel-border: 1px solid rgba(234, 229, 224, 0.09);
   --panel-backdrop: none;
-  --panel-shadow: none;
-  --atmo: none;
-  --panel-grad-inline: linear-gradient(to left, rgba(2, 13, 21, 0.82), rgba(2, 13, 21, 0.35));
-  --panel-grad-block: linear-gradient(to bottom, rgba(2, 13, 21, 0.82), rgba(2, 13, 21, 0.35));
-  --callout-bg: rgba(2, 14, 22, 0.9);
-  --callout-border: 1px solid rgba(63, 217, 139, 0.5);
-  --toggle-bg: rgba(4, 20, 30, 0.6);
-  --label-halo: 0 2px 10px rgba(2, 10, 18, 0.9);
-  --scan-line: rgba(255, 255, 255, 0.022);
+  --panel-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 22px 48px rgba(0, 0, 0, 0.4);
+  --panel-grad-inline: linear-gradient(to left, rgba(42, 36, 32, 0.92), rgba(42, 36, 32, 0.55));
+  --panel-grad-block: linear-gradient(to bottom, rgba(42, 36, 32, 0.92), rgba(42, 36, 32, 0.55));
+  --callout-bg: rgba(42, 36, 32, 0.95);
+  --callout-border: 1px solid rgba(234, 229, 224, 0.16);
+  --toggle-bg: rgba(42, 36, 32, 0.78);
+  --label-halo: 0 2px 10px rgba(30, 26, 23, 0.95);
+  --scan-line: rgba(234, 229, 224, 0.02);
   --scan-blend: overlay;
-  --h1-glow: drop-shadow(0 0 28px rgba(63, 217, 139, 0.28));
-  --stat-glow: 0 0 18px rgba(63, 217, 139, 0.45);
-  --shield-glow: drop-shadow(0 0 10px rgba(63, 217, 139, 0.5));
-  --tick-glow: 0 0 10px rgba(63, 217, 139, 0.8);
-  --sel-bg: rgba(27, 158, 86, 0.45);
-  --sel-ink: #ecfdf5;
-  --scrollbar: rgba(63, 217, 139, 0.4);
+  --h1-glow: drop-shadow(0 0 24px rgba(107, 142, 111, 0.3));
+  --stat-glow: 0 0 16px rgba(107, 142, 111, 0.4);
+  --shield-glow: drop-shadow(0 0 9px rgba(107, 142, 111, 0.55));
+  --tick-glow: 0 0 9px rgba(107, 142, 111, 0.75);
+  --sel-bg: rgba(221, 141, 101, 0.35);
+  --sel-ink: #eae5e0;
+  --scrollbar: rgba(107, 142, 111, 0.45);
 }
 
 * {
@@ -131,16 +147,6 @@ body {
   position: fixed;
   inset: 0;
   z-index: 0;
-}
-
-/* Atmospheric wash painted over the WebGL frame (inside .stage, so it sits
-   under all DOM). Daylight gets brand-tinted radials + ground haze; the
-   dark ops room sets --atmo: none and keeps its raw render. */
-.stage-atmo {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: var(--atmo);
 }
 
 .sections {
@@ -340,12 +346,12 @@ body {
 }
 .theme-toggle:hover,
 .lang-toggle:hover {
-  border-color: rgba(var(--accent-rgb), 0.55);
+  border-color: rgba(var(--cta-rgb), 0.55);
   transform: translateY(-1px);
 }
 .theme-toggle:focus-visible,
 .lang-toggle:focus-visible {
-  outline: 2px solid var(--emerald-bright);
+  outline: 2px solid var(--cta);
   outline-offset: 3px;
 }
 .theme-toggle .icon {
@@ -376,8 +382,8 @@ body {
 
 .callout {
   display: grid;
-  gap: 3px;
-  padding: 8px 12px;
+  gap: 4px;
+  padding: 10px 14px;
   /* Slate hairline + emerald spine in daylight; emerald frame in the dark. */
   border: var(--callout-border);
   border-inline-start: 3px solid var(--emerald-bright);
@@ -448,7 +454,8 @@ body {
 }
 
 .hero-block {
-  max-width: 760px;
+  /* Owns only the copy half of the frame — the device holds the other. */
+  max-width: 620px;
   margin-top: -4vh;
 }
 
@@ -459,7 +466,7 @@ body {
   font-size: 12.5px;
   color: var(--emerald-bright);
   border: 1px solid rgba(var(--accent-rgb), 0.35);
-  background: rgba(27, 158, 86, 0.1);
+  background: var(--accent-soft-bg);
   padding: 7px 14px;
   border-radius: 999px;
   backdrop-filter: blur(6px);
@@ -476,20 +483,21 @@ body {
 
 h1 {
   margin-top: 26px;
-  font-size: clamp(42px, 7.4vw, 104px);
+  font-size: clamp(40px, 6.4vw, 90px);
   line-height: 1.12;
   font-weight: 700;
   letter-spacing: -0.01em;
   display: grid;
+  color: var(--heading); /* sage in daylight, ink in the ops room */
 }
 /* Latin copy runs much longer than the dense Arabic taglines — English
    gets its own, smaller type ramp so headlines stay composed, not walls. */
 html[lang="en"] h1 {
-  font-size: clamp(32px, 5vw, 70px);
+  font-size: clamp(30px, 4.4vw, 62px);
   letter-spacing: -0.02em;
   line-height: 1.08;
 }
-html[lang="en"] .hero-block { max-width: 900px; }
+html[lang="en"] .hero-block { max-width: 680px; }
 html[lang="en"] h2 { font-size: clamp(26px, 3.6vw, 46px); }
 html[lang="en"] .outro-inner h2 { font-size: clamp(25px, 3.2vw, 42px); }
 h1 .accent {
@@ -510,7 +518,7 @@ h1 .accent {
 
 .copy-block {
   max-width: 560px;
-  padding: 26px 30px;
+  padding: 32px 36px;
   border: var(--panel-border);
   border-inline-start: 2px solid rgba(var(--accent-rgb), 0.5);
   background: var(--panel-grad-inline);
@@ -541,6 +549,7 @@ h2 {
   font-size: clamp(30px, 4.4vw, 56px);
   line-height: 1.22;
   font-weight: 700;
+  color: var(--heading);
 }
 
 .lead {
@@ -659,7 +668,7 @@ h2 {
   transition: border-color 0.3s ease, transform 0.3s ease;
 }
 .domain:hover {
-  border-color: rgba(var(--accent-rgb), 0.6);
+  border-color: rgba(var(--cta-rgb), 0.6);
   transform: translateY(-4px);
 }
 .domain-scrim {
@@ -717,12 +726,12 @@ h2 {
   transition: border-color 0.3s ease, background 0.3s ease;
 }
 .contact-item:hover {
-  border-color: rgba(var(--accent-rgb), 0.65);
-  background: rgba(27, 158, 86, 0.08);
+  border-color: rgba(var(--cta-rgb), 0.65);
+  background: var(--accent-soft-bg);
 }
 .contact-item .mono {
   font-size: 15px;
-  color: var(--emerald-bright);
+  color: var(--cta); /* the actual actionable link — terracotta in daylight */
 }
 .contact-item span:last-child { font-size: 12px; color: var(--dim); }
 
@@ -741,7 +750,7 @@ h2 {
 
 /* Focus visibility for the interactive outro */
 a:focus-visible {
-  outline: 2px solid var(--emerald-bright);
+  outline: 2px solid var(--cta);
   outline-offset: 3px;
 }
 

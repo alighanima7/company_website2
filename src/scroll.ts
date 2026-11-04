@@ -60,7 +60,8 @@ export function syncPhases(): void {
   };
   PHASES.heroEnd = at(".section-teardown") ?? PHASES.heroEnd;
   PHASES.teardownEnd = at(".section-collar") ?? PHASES.teardownEnd;
-  PHASES.collarEnd = at(".section-network") ?? PHASES.collarEnd;
+  PHASES.collarEnd = at(".section-city") ?? PHASES.collarEnd;
+  PHASES.cityEnd = at(".section-network") ?? PHASES.cityEnd;
   PHASES.networkEnd = at(".section-ai") ?? PHASES.networkEnd;
   PHASES.aiEnd = at(".section-outro") ?? PHASES.aiEnd;
 }

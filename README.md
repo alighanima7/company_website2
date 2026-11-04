@@ -49,9 +49,10 @@ One continuous scroll (~7 viewport-heights) drives a choreographed scene:
 | 01 · الجهاز | Procedural NNS tracker assembles mid-air; headline + scroll cue |
 | 02 · العتاد | The device **explodes into its real components** (GPS, CANbus/FMS, sensors, antenna, PCB) with floating HUD callouts |
 | 03 · الطوق الذكي | The **smart security collar** (the Wild Animal Tracking field unit, modeled on the profile's own product photo) rises as the device parks itself as the hub: riveted leather band with stitching, steel buckle, armor plates and the navy tracking module — scroll-scrubbed turn, teardown with bilingual callouts, sensor chips |
-| 04 · الشبكة | An extruded 3D Kingdom rises; the five operating cities ignite and link to the Riyadh hub; live company figures count up |
-| 05 · الذكاء | A security scan sweeps the Kingdom while DMS/ADAS detection events stream in |
-| 06 · الحلول | The scene recedes; solution domains, licences and contact band |
+| 04 · المدينة الذكية | A **smart-city micro-district** on a circular platform: tower cluster with lit windows (smart building), parking lot with live occupancy dots, lamp-lined street arc (smart lighting), bins + meter + inspection chamber (waste & metering) — all wired to a central IoT hub by dashed data pulses under a turning management ring, with sequenced bilingual callouts as the camera orbits |
+| 05 · الشبكة | A **topographic 3D Kingdom** rises — low-poly Sarawat range along the Red Sea (peaking toward Abha), Tabuk highlands, the Najd plateau under Riyadh, coastal plains at Jeddah/Dammam — cities ignite at their real elevations and link to the Riyadh hub; live company figures count up |
+| 06 · الذكاء | A security scan sweeps the Kingdom while DMS/ADAS detection events stream in |
+| 07 · الحلول | The scene recedes; solution domains, licences and contact band |
 
 Phase boundaries are **derived at runtime** from the actual section offsets
 (`syncPhases()` in `src/scroll.ts`) and re-derived on resize/font-load with
@@ -77,16 +78,22 @@ flash-free. Switching plays a short veil cross-fade in the target canvas
 color, masking the (inherently single-frame) WebGL palette swap.
 
 The 3D scene follows via `SCENE` palettes in `src/theme.ts`. Dark is a
-glow instrument: additive blending, bloom, emissive neon. Light is a
-daylight studio: `#eef2f6` muted pearl-slate canvas with emerald/navy atmospheric radials
-(CSS `.stage-atmo` overlay), ACES filmic tone mapping at a hotter
-exposure (1.15) for punchy metals, a white key light casting real
-PCF-soft shadows (2K map, tight frustum) onto an invisible
-ShadowMaterial catcher — the device, each exploded part and the Kingdom
-slab all ground themselves — plus a silver-blue hemisphere fill,
-stronger IBL for speculars on the polished alloy, normal blending and
-deep brand inks (additive light and low bloom thresholds are both
-invisible-or-haze on a light canvas). DPR renders up to 2 for Retina/4K
-sharpness. DOM panels frost (`backdrop-filter`) in light only; dark
-keeps frost off so its translucent gradients don't smear the 3D
-callouts passing beneath.
+**warm luxury night** on its own strict 5-color system — Brown-Gray
+`#1E1A17` canvas/fog, Dark Beige `#2A2420` cards and slab, Bright Sage
+`#6B8E6F` headings/rim light/city beacons/scan, Ivory `#EAE5E0` body
+text and key light, Bright Terracotta `#DD8D65` CTAs, the Riyadh hub,
+network arcs and city pulses — still a glow instrument (additive
+blending + bloom) but warm instead of neon.
+Light is a **warm earthy daylight** built on a strict 5-color system:
+Warm Beige `#F4EBE1` canvas/fog/atmosphere (no glare fields), Base White
+`#FFFFFF` cards and panels, Sage Green `#2F5233` headings + brand
+accents + line work, Dark Brown `#3E332E` body text and shadows, Warm
+Terracotta `#C87A53` CTAs, links, the Riyadh hub beacon and network
+arcs. The Kingdom renders as a forest-sage slab; the device hardware
+keeps its navy alloy + emerald LEDs (product identity — reads like a
+product shot on kraft paper). ACES tone mapping, a warm key light with
+real PCF shadows onto an invisible brown-tinted catcher, warm hemisphere
+fill, normal blending (additive light and low bloom thresholds are both
+invisible-or-haze on a light canvas). DPR renders up to 2. DOM panels
+frost (`backdrop-filter`) in light only; dark keeps frost off so its
+translucent gradients don't smear the 3D callouts passing beneath.

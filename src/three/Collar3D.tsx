@@ -34,16 +34,14 @@ interface CollarPart {
   /** Exploded offset, ADDED to rest. */
   readonly apart: readonly [number, number, number];
   readonly stagger: number;
-  readonly calloutId?: string;
-  readonly calloutAnchor?: readonly [number, number, number];
 }
 
 const OUT = BAND_R + BAND_T; // outer band surface radius
 
 const PARTS: readonly CollarPart[] = [
-  { id: "module", rest: [OUT + 0.1, 0, 0], apart: [0.95, 0.2, 0], stagger: 0, calloutId: "module", calloutAnchor: [0.55, 0.42, 0] },
-  { id: "buckle", rest: [-(OUT + 0.04), 0, 0], apart: [-0.85, 0.12, 0], stagger: 0.3, calloutId: "buckle", calloutAnchor: [-0.5, 0.4, 0] },
-  { id: "plateA", rest: [0, 0, OUT + 0.02], apart: [0, 0.08, 0.8], stagger: 0.55, calloutId: "plate", calloutAnchor: [0, 0.38, 0.5] },
+  { id: "module", rest: [OUT + 0.1, 0, 0], apart: [0.95, 0.2, 0], stagger: 0 },
+  { id: "buckle", rest: [-(OUT + 0.04), 0, 0], apart: [-0.85, 0.12, 0], stagger: 0.3 },
+  { id: "plateA", rest: [0, 0, OUT + 0.02], apart: [0, 0.08, 0.8], stagger: 0.55 },
   { id: "plateB", rest: [0, 0, -(OUT + 0.02)], apart: [0, 0.08, -0.8], stagger: 0.75 },
 ];
 
@@ -77,6 +75,13 @@ function stitchPoints(y: number): Array<[number, number, number]> {
   }
   return pts;
 }
+
+/** Hoisted: the stitch geometry is static — computing it per React render
+ *  (theme/locale changes) would rebuild the drei Line geometries for nothing. */
+const STITCH_RINGS: ReadonlyArray<Array<[number, number, number]>> = [
+  BAND_H - 0.045,
+  -(BAND_H - 0.045),
+].map(stitchPoints);
 
 const RIVET_COUNT = 12;
 
@@ -203,10 +208,10 @@ export function Collar3D(): JSX.Element {
         <mesh geometry={bandGeometry} material={mats.leather} />
 
         {/* Edge stitching — two dashed thread rings */}
-        {[BAND_H - 0.045, -(BAND_H - 0.045)].map((y) => (
+        {STITCH_RINGS.map((points, i) => (
           <Line
-            key={y}
-            points={stitchPoints(y)}
+            key={i}
+            points={points}
             color="#d9b98e"
             lineWidth={1.1}
             dashed
@@ -235,8 +240,9 @@ export function Collar3D(): JSX.Element {
           );
         })}
 
-        {/* Strap callout rides the band itself */}
-        {calloutFor("strap", [0, BAND_H + 0.3, 0.72])}
+        {/* Strap callout hangs WELL below the band — outside the silhouette
+            so the card never covers the leather it describes. */}
+        {calloutFor("strap", [0, -(BAND_H + 0.95), 0.75])}
 
         {/* ── Module (tracking unit on steel back-plate) ── */}
         <group
@@ -259,7 +265,7 @@ export function Collar3D(): JSX.Element {
               <sphereGeometry args={[0.032, 10, 10]} />
             </mesh>
           </group>
-          {calloutFor("module", [0.55, 0.42, 0])}
+          {calloutFor("module", [0.85, 0.78, 0])}
         </group>
 
         {/* ── Buckle (frame + prong + strap tongue) ── */}
@@ -286,7 +292,9 @@ export function Collar3D(): JSX.Element {
             {/* leather tongue passing through */}
             <RoundedBox args={[0.045, 0.36, 0.62]} radius={0.02} smoothness={3} material={mats.leatherDark} position={[-0.04, 0, 0.12]} />
           </group>
-          {calloutFor("buckle", [-0.5, 0.42, 0])}
+          {/* Outside the buckle's silhouette; low enough to survive the
+              part's upward explode without clipping the viewport top. */}
+          {calloutFor("buckle", [-0.9, 0.55, 0])}
         </group>
 
         {/* ── Armor plates (±z) ── */}
@@ -301,7 +309,8 @@ export function Collar3D(): JSX.Element {
               <cylinderGeometry args={[0.024, 0.024, 0.02, 10]} />
             </mesh>
           ))}
-          {calloutFor("plate", [0, 0.4, 0.45])}
+          {/* Rings the plate from outside the collar's silhouette. */}
+          {calloutFor("plate", [0.55, 0.8, 0.95])}
         </group>
         <group
           ref={(el) => {

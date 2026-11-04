@@ -98,6 +98,12 @@ export function Tracker(): JSX.Element {
   const mode = useTheme();
   const locale = useLocale();
 
+  useEffect(() => {
+    return () => {
+      pcbTexture.dispose();
+    };
+  }, [pcbTexture]);
+
   /* The device keeps its navy-metal identity in both themes, but daylight
      lifts the alloy a notch and polishes it (lower roughness → crisp
      speculars under the white key light) so it reads as a studio product

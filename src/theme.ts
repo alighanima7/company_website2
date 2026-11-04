@@ -18,7 +18,7 @@ export type ThemeMode = "light" | "dark";
 export const THEME_STORAGE_KEY = "nns.theme.v2";
 export const THEME_COOKIE = "nns-v2-theme";
 /** Canvas color per theme — also the toggle cross-fade veil color. */
-export const CANVAS_COLOR: Record<ThemeMode, string> = { light: "#eef2f6", dark: "#020a12" };
+export const CANVAS_COLOR: Record<ThemeMode, string> = { light: "#f4ebe1", dark: "#1e1a17" };
 
 const listeners = new Set<() => void>();
 
@@ -93,14 +93,6 @@ export interface ScenePalette {
   readonly shadows: boolean;
   readonly shadowOpacity: number;
   readonly shadowColor: string;
-  readonly gridCell: string;
-  readonly gridSection: string;
-  readonly gridCellThickness: number;
-  readonly gridSectionThickness: number;
-  readonly sparkA: string;
-  readonly sparkB: string;
-  readonly sparkOpacityA: number;
-  readonly sparkOpacityB: number;
   readonly bloom: boolean;
   readonly vignetteDarkness: number;
   readonly vignetteOffset: number;
@@ -117,6 +109,14 @@ export interface ScenePalette {
   readonly slab: string;
   readonly slabMetalness: number;
   readonly slabRoughness: number;
+  /** Low-poly topographic surface riding on the slab. */
+  readonly terrain: string;
+  /** Smart City micro-model. */
+  readonly cityBase: string;
+  readonly cityTower: string;
+  readonly cityWindowA: string;
+  readonly cityWindowB: string;
+  readonly cityPulse: string;
   readonly edge: string;
   readonly edgeOpacity: number;
   readonly disc: string;
@@ -132,34 +132,29 @@ export interface ScenePalette {
 
 export const SCENE: Record<ThemeMode, ScenePalette> = {
   light: {
-    // Muted pearl-slate canvas + calmer exposure/key: anti-glare for long
-    // viewing. Line work (grid/edges/arcs) runs DEEPER and heavier instead,
-    // so clarity comes from contrast of strokes, not brightness of ground.
-    canvas: "#eef2f6",
-    fog: "#eaeff4",
+    // Warm earthy daylight (the 5-color system): Warm Beige #F4EBE1 canvas
+    // and fog, warm key + sand fill, Sage #2F5233 / Terracotta #C87A53 line
+    // work, brown-tinted shadows. Clarity comes from deep warm strokes on a
+    // soft ground — zero glare. The device hardware keeps its navy alloy +
+    // emerald LEDs (product identity, reads near-black on beige like a
+    // product shot on kraft paper).
+    canvas: "#f4ebe1",
+    fog: "#efe4d7",
     fogDensity: 0.02,
     exposure: 1.08,
-    envIntensity: 0.9,
-    keyIntensity: 2.0,
-    keyColor: "#ffffff",
-    rimIntensity: 0.65,
-    rimColor: "#1b9e56",
+    envIntensity: 0.95,
+    keyIntensity: 2.2,
+    keyColor: "#fff6ec",
+    rimIntensity: 0.75,
+    rimColor: "#3f6b46",
     fillIntensity: 0.55,
-    fillColor: "#8fb6d4",
+    fillColor: "#cdb9a4",
     hemiIntensity: 0.5,
-    hemiSky: "#dfeaf4",
-    hemiGround: "#eef2f6",
+    hemiSky: "#f0e2d2",
+    hemiGround: "#f4ebe1",
     shadows: true,
-    shadowOpacity: 0.26,
-    shadowColor: "#0d2440",
-    gridCell: "#94a9bc",
-    gridSection: "#5f9b7a",
-    gridCellThickness: 0.85,
-    gridSectionThickness: 1.4,
-    sparkA: "#0f8a4d",
-    sparkB: "#0d4b6e",
-    sparkOpacityA: 0.22,
-    sparkOpacityB: 0.15,
+    shadowOpacity: 0.25,
+    shadowColor: "#3e332e",
     bloom: false,
     vignetteDarkness: 0.22,
     vignetteOffset: 0.1,
@@ -171,47 +166,50 @@ export const SCENE: Record<ThemeMode, ScenePalette> = {
     emissiveEmerald: 1.5,
     emissiveIce: 1.1,
     emissivePcb: 0.4,
-    slab: "#0f3350",
-    slabMetalness: 0.5,
-    slabRoughness: 0.38,
-    edge: "#128a4f",
+    slab: "#294733",
+    slabMetalness: 0.45,
+    slabRoughness: 0.42,
+    terrain: "#3e6b4b",
+    cityBase: "#cdbaa2",
+    cityTower: "#efe6d8",
+    cityWindowA: "#3f8f55",
+    cityWindowB: "#c87a53",
+    cityPulse: "#c87a53",
+    edge: "#6fa077",
     edgeOpacity: 1,
-    disc: "#0d4b6e",
-    discOpacity: 0.14,
-    hubBeacon: "#12a35f",
-    cityBeacon: "#1180b3",
-    arc: "#0e7fb0",
+    disc: "#3e332e",
+    discOpacity: 0.12,
+    hubBeacon: "#c87a53",
+    cityBeacon: "#4e7d57",
+    arc: "#c87a53",
     arcWidth: 2.4,
-    scan: "#10a057",
+    scan: "#4e8c5b",
     glowBlending: THREE.NormalBlending,
     columnOpacity: 0.95,
   },
   dark: {
-    canvas: "#020a12",
-    fog: "#020a12",
+    // Warm luxury night (the dark 5-color system): #1E1A17 brown-gray
+    // canvas and fog, ivory key light, bright-sage rim, terracotta glow
+    // fill. The map and city remap to dark-beige/sage/terracotta; the
+    // device hardware keeps its navy alloy + emerald/cyan LEDs (product
+    // identity, same rule as the light theme).
+    canvas: "#1e1a17",
+    fog: "#1e1a17",
     fogDensity: 0.026,
     exposure: 1.0,
-    envIntensity: 0.42,
-    keyIntensity: 1.5,
-    keyColor: "#cfe9ff",
-    rimIntensity: 0.8,
-    rimColor: "#3fd98b",
+    envIntensity: 0.5,
+    keyIntensity: 1.7,
+    keyColor: "#f3e9dd",
+    rimIntensity: 0.95,
+    rimColor: "#6b8e6f",
     fillIntensity: 0.5,
-    fillColor: "#4fc3e8",
+    fillColor: "#dd8d65",
     hemiIntensity: 0,
-    hemiSky: "#1a3448",
-    hemiGround: "#020a12",
+    hemiSky: "#3a332c",
+    hemiGround: "#1e1a17",
     shadows: false,
     shadowOpacity: 0,
     shadowColor: "#000000",
-    gridCell: "#0a2a3c",
-    gridSection: "#0f4b32",
-    gridCellThickness: 0.6,
-    gridSectionThickness: 1,
-    sparkA: "#3fd98b",
-    sparkB: "#4fc3e8",
-    sparkOpacityA: 0.42,
-    sparkOpacityB: 0.3,
     bloom: true,
     vignetteDarkness: 0.78,
     vignetteOffset: 0.18,
@@ -223,19 +221,25 @@ export const SCENE: Record<ThemeMode, ScenePalette> = {
     emissiveEmerald: 2.2,
     emissiveIce: 1.6,
     emissivePcb: 0.55,
-    slab: "#07131f",
-    slabMetalness: 0.55,
-    slabRoughness: 0.42,
-    edge: "#1b9e56",
-    edgeOpacity: 0.55,
-    disc: "#06243a",
-    discOpacity: 0.55,
-    hubBeacon: "#3fd98b",
-    cityBeacon: "#4fc3e8",
-    arc: "#4fc3e8",
-    arcWidth: 1.4,
-    scan: "#3fd98b",
+    slab: "#241f1a",
+    slabMetalness: 0.5,
+    slabRoughness: 0.45,
+    terrain: "#2e362c",
+    cityBase: "#2a2420",
+    cityTower: "#38322b",
+    cityWindowA: "#6b8e6f",
+    cityWindowB: "#dd8d65",
+    cityPulse: "#dd8d65",
+    edge: "#6b8e6f",
+    edgeOpacity: 0.6,
+    disc: "#3a2c20",
+    discOpacity: 0.5,
+    hubBeacon: "#dd8d65",
+    cityBeacon: "#6b8e6f",
+    arc: "#dd8d65",
+    arcWidth: 1.6,
+    scan: "#6b8e6f",
     glowBlending: THREE.AdditiveBlending,
-    columnOpacity: 0.65,
+    columnOpacity: 0.7,
   },
 };

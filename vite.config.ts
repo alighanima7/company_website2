@@ -11,7 +11,12 @@ export default defineConfig({
       output: {
         manualChunks: {
           three: ["three", "@react-three/fiber", "@react-three/drei"],
-          fx: ["postprocessing", "@react-three/postprocessing"],
+          // ONLY the vanilla postprocessing lib here (it depends on three
+          // alone). Its react wrapper must stay in the index chunk: pinning
+          // it here makes fx↔index circular (wrapper needs react, index
+          // needs the wrapper) and the init order breaks with a TDZ
+          // ReferenceError on load.
+          fx: ["postprocessing"],
           gsap: ["gsap", "lenis"],
         },
       },

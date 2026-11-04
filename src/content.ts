@@ -271,8 +271,17 @@ export const COPY = {
       en: "Real-time tracking for animals and assets in harsh environments — geo-fencing, remote monitoring, and satellite + solar connectivity beyond coverage.",
     },
   },
+  city: {
+    kicker: "04 // SMART CITY · IOT",
+    h2a: { ar: "مدينة كاملة،", en: "An entire city," },
+    h2b: { ar: "تُدار بذكاء.", en: "managed intelligently." },
+    lead: {
+      ar: "إنترنت الأشياء في كل زاوية — مبانٍ تُحسّن طاقتها، مواقف تُرشد سائقيها، إنارة تُدار عن بُعد، ومخلفات وعدادات تُراقب لحظيًا.",
+      en: "IoT on every corner — buildings optimizing their energy, parking guiding drivers, remotely managed lighting, and waste & meters monitored in real time.",
+    },
+  },
   network: {
-    kicker: "04 // KINGDOM NETWORK",
+    kicker: "05 // KINGDOM NETWORK",
     h2: { ar: "تغطية لكافة مناطق المملكة", en: "Coverage across the whole Kingdom" },
     lead: {
       ar: "خمس مدن تشغيل، ومركز قيادة واحد في الرياض.",
@@ -280,12 +289,12 @@ export const COPY = {
     },
   },
   ai: {
-    kicker: "05 // AI VISION · IVMS",
+    kicker: "06 // AI VISION · IVMS",
     h2a: { ar: "رؤية ترصد الخطر", en: "Vision that catches danger" },
     h2b: { ar: "قبل وقوعه.", en: "before it strikes." },
   },
   outro: {
-    kicker: "06 // SOLUTIONS",
+    kicker: "07 // SOLUTIONS",
     h2: { ar: "ثلاثون حلًا في أربعة مجالات", en: "Thirty solutions across four domains" },
   },
   cue: { ar: "مرّر للاستكشاف", en: "Scroll to explore" },
@@ -332,6 +341,45 @@ export const COLLAR_SENSORS: readonly Bi[] = [
   { ar: "سياج جغرافي", en: "Geo-fencing" },
 ];
 
+/** Smart City pillars — from the profile's Smart City pages (p9–10, p26):
+ *  smart building energy/lighting, AI parking with guidance + mobile app,
+ *  remotely scheduled street lighting, waste fill-level + route
+ *  optimization, metering and inspection-chamber monitoring. */
+export const CITY_CALLOUTS: readonly PartCallout[] = [
+  {
+    id: "building",
+    tag: "SMART BUILDING",
+    desc: { ar: "إنترنت الأشياء لرفع كفاءة المبنى وترشيد الطاقة", en: "IoT raising building efficiency & saving energy" },
+    spec: "ENERGY · SMART LIGHTING",
+  },
+  {
+    id: "parking",
+    tag: "SMART PARKING",
+    desc: { ar: "رؤية لحظية للمواقف الشاغرة وتقليل الازدحام", en: "Real-time occupancy view, less congestion" },
+    spec: "AI GUIDANCE · MOBILE APP",
+  },
+  {
+    id: "lighting",
+    tag: "STREET LIGHTING",
+    desc: { ar: "تحكم عن بُعد بالإنارة وجدولة التشغيل", en: "Remote lighting control & scheduling" },
+    spec: "REMOTE · SUSTAINABLE",
+  },
+  {
+    id: "waste",
+    tag: "WASTE + METERING",
+    desc: { ar: "مراقبة الحاويات والعدادات وغرف التفتيش لحظيًا", en: "Bins, meters & inspection chambers monitored live" },
+    spec: "FILL LEVEL · ROUTE OPT",
+  },
+];
+
+/** The remaining Smart City services, as section chips (p9–10). */
+export const CITY_FEATURES: readonly Bi[] = [
+  { ar: "جودة الهواء الداخلي", en: "Indoor air quality" },
+  { ar: "محطة الطقس والبيئة", en: "Weather & environment" },
+  { ar: "غرف التفتيش", en: "Inspection chambers" },
+  { ar: "القياس الذكي", en: "Smart metering" },
+];
+
 /** Scroll phase boundaries (fractions of total scroll). One source of truth
  *  shared by the camera rig, the scene and the DOM sections.
  *
@@ -343,21 +391,24 @@ export const PHASES: {
   heroEnd: number;
   teardownEnd: number;
   collarEnd: number;
+  cityEnd: number;
   networkEnd: number;
   aiEnd: number;
 } = {
-  heroEnd: 0.18,
-  teardownEnd: 0.38,
-  collarEnd: 0.58,
-  networkEnd: 0.78,
-  aiEnd: 0.95,
+  heroEnd: 0.15,
+  teardownEnd: 0.32,
+  collarEnd: 0.49,
+  cityEnd: 0.65,
+  networkEnd: 0.82,
+  aiEnd: 0.97,
 };
 
 export const PHASE_LABELS: ReadonlyArray<{ readonly code: string; readonly name: Bi }> = [
   { code: "01 // DEVICE", name: { ar: "الجهاز", en: "Device" } },
   { code: "02 // HARDWARE", name: { ar: "العتاد", en: "Hardware" } },
   { code: "03 // SMART COLLAR", name: { ar: "الطوق الذكي", en: "Smart Collar" } },
-  { code: "04 // NETWORK", name: { ar: "الشبكة", en: "Network" } },
-  { code: "05 // AI VISION", name: { ar: "الذكاء", en: "AI Vision" } },
-  { code: "06 // SOLUTIONS", name: { ar: "الحلول", en: "Solutions" } },
+  { code: "04 // SMART CITY", name: { ar: "المدينة الذكية", en: "Smart City" } },
+  { code: "05 // NETWORK", name: { ar: "الشبكة", en: "Network" } },
+  { code: "06 // AI VISION", name: { ar: "الذكاء", en: "AI Vision" } },
+  { code: "07 // SOLUTIONS", name: { ar: "الحلول", en: "Solutions" } },
 ];

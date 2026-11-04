@@ -1,4 +1,3 @@
-import { Grid, Sparkles } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Bloom, EffectComposer, Vignette } from "@react-three/postprocessing";
 import { useEffect, useMemo } from "react";
@@ -7,8 +6,10 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 
 import { PHASES } from "../content";
+import { getLocale } from "../locale";
 import { clamp01, dampScroll, lerp, scrollState } from "../scroll";
 import { getTheme, SCENE, useTheme } from "../theme";
+import { CityScape3D } from "./CityScape3D";
 import { Collar3D } from "./Collar3D";
 import { KsaMap3D } from "./KsaMap3D";
 import { Tracker } from "./Tracker";
@@ -26,19 +27,28 @@ interface CamKey {
   readonly look: readonly [number, number, number];
 }
 
-/** The whole film, as eight camera marks. The `p` of the six middle marks
+/** The whole film, as ten camera marks. The `p` of the eight middle marks
  *  is re-derived from the runtime-synced PHASES so the cuts always land on
  *  the narrative beats, whatever the real section geometry turns out to be.
- *  Marks 3–4 are the collar act: a close right-hand orbit, then a low pass
- *  to the other side while the scrubbed turn presents the teardown. */
+ *
+ *  SIDE-BY-SIDE RULE: each act's look-at is offset on X so the model parks
+ *  on the side OPPOSITE its copy panel (Arabic/RTL reference — the rig is
+ *  mirrored wholesale for LTR, see CameraRig): hero & collar copy sit
+ *  inline-start (right) so their models project LEFT (look.x > 0);
+ *  teardown & city copy sit inline-end (left) so their models project
+ *  RIGHT (look.x < 0); the network panel is top-center so the map is
+ *  pushed DOWN (look.y raised); the AI panel is left so the map leans
+ *  right. Models and panels never stack. */
 const CAM_KEYS: readonly CamKey[] = [
-  { p: 0.0, pos: [0, 0.55, 7.6], look: [0, 0.2, 0] },
-  { p: 0.15, pos: [2.8, 1.35, 5.5], look: [0, 0.12, 0] },
-  { p: 0.35, pos: [-3.6, 1.75, 5.8], look: [0, 0.4, 0] },
-  { p: 0.44, pos: [3.1, 1.0, 4.4], look: [0, 0.1, 0] },
-  { p: 0.55, pos: [-2.7, 0.8, 4.9], look: [0, 0.05, 0] },
-  { p: 0.7, pos: [0, 6.8, 10.4], look: [0, -0.7, 0] },
-  { p: 0.87, pos: [-6.6, 4.7, 7.0], look: [0, -0.95, 0] },
+  { p: 0.0, pos: [0.4, 0.55, 7.6], look: [1.5, 0.2, 0] },
+  { p: 0.13, pos: [2.8, 1.35, 5.5], look: [1.35, 0.12, 0] },
+  { p: 0.27, pos: [-3.6, 1.75, 5.8], look: [-1.1, 0.4, 0] },
+  { p: 0.37, pos: [3.1, 1.0, 4.4], look: [1.2, 0.1, 0] },
+  { p: 0.46, pos: [-2.7, 0.8, 4.9], look: [1.1, 0.05, 0] },
+  { p: 0.54, pos: [3.4, 2.0, 5.2], look: [-1.2, 0.55, 0] },
+  { p: 0.62, pos: [-3.0, 1.1, 5.4], look: [-1.1, 0.45, 0] },
+  { p: 0.75, pos: [0, 6.8, 10.4], look: [0, 0.4, 0] },
+  { p: 0.9, pos: [-6.6, 4.7, 7.0], look: [-0.8, -0.95, 0] },
   { p: 1.0, pos: [0.6, 2.5, 12.2], look: [0, -0.55, 0] },
 ];
 
@@ -49,12 +59,16 @@ function syncCamKeys(): void {
   const k4 = CAM_KEYS[4];
   const k5 = CAM_KEYS[5];
   const k6 = CAM_KEYS[6];
+  const k7 = CAM_KEYS[7];
+  const k8 = CAM_KEYS[8];
   if (k1) k1.p = PHASES.heroEnd * 0.85;
   if (k2) k2.p = lerp(PHASES.heroEnd, PHASES.teardownEnd, 0.85);
   if (k3) k3.p = lerp(PHASES.teardownEnd, PHASES.collarEnd, 0.3);
   if (k4) k4.p = lerp(PHASES.teardownEnd, PHASES.collarEnd, 0.85);
-  if (k5) k5.p = lerp(PHASES.collarEnd, PHASES.networkEnd, 0.6);
-  if (k6) k6.p = lerp(PHASES.networkEnd, PHASES.aiEnd, 0.55);
+  if (k5) k5.p = lerp(PHASES.collarEnd, PHASES.cityEnd, 0.3);
+  if (k6) k6.p = lerp(PHASES.collarEnd, PHASES.cityEnd, 0.85);
+  if (k7) k7.p = lerp(PHASES.cityEnd, PHASES.networkEnd, 0.6);
+  if (k8) k8.p = lerp(PHASES.networkEnd, PHASES.aiEnd, 0.55);
 }
 
 const POS = new THREE.Vector3();
@@ -90,14 +104,18 @@ function CameraRig(): null {
 
   useFrame((state, dt) => {
     syncCamKeys();
-    const restPose = (PHASES.collarEnd + PHASES.networkEnd) / 2;
+    const restPose = (PHASES.cityEnd + PHASES.networkEnd) / 2;
     const p = scrollState.reduced ? restPose : dampScroll(Math.min(dt, 0.05));
     sampleCamera(p, POS, LOOK);
+    // The film is authored for RTL (panels inline-start = right). For LTR
+    // the panels mirror via CSS logical properties — mirroring the camera's
+    // X keeps every model on the side OPPOSITE its panel in both locales.
+    const mx = getLocale() === "en" ? -1 : 1;
     // A breath of parallax from the pointer keeps held frames alive.
     const px = state.pointer.x * 0.25;
     const py = state.pointer.y * 0.15;
-    camera.position.set(POS.x + px, POS.y - py, POS.z);
-    camera.lookAt(LOOK);
+    camera.position.set(POS.x * mx + px, POS.y - py, POS.z);
+    camera.lookAt(LOOK.x * mx, LOOK.y, LOOK.z);
   });
 
   return null;
@@ -202,27 +220,11 @@ export function Experience(): JSX.Element {
           </mesh>
         )}
 
-        {/* Command-floor grid, far below the hero object. */}
-        <Grid
-          position={[0, -1.62, 0]}
-          args={[40, 40]}
-          cellSize={0.8}
-          cellThickness={p.gridCellThickness}
-          cellColor={p.gridCell}
-          sectionSize={4}
-          sectionThickness={p.gridSectionThickness}
-          sectionColor={p.gridSection}
-          fadeDistance={30}
-          fadeStrength={2.4}
-          infiniteGrid
-        />
-
-        {/* Ambient data motes (remounted per theme — color is a shader uniform). */}
-        <Sparkles key={`a-${mode}`} count={120} scale={[20, 9, 16]} size={1.6} speed={0.16} opacity={p.sparkOpacityA} color={p.sparkA} />
-        <Sparkles key={`b-${mode}`} count={70} scale={[16, 7, 12]} size={1.1} speed={0.1} opacity={p.sparkOpacityB} color={p.sparkB} />
-
+        {/* Clean-studio stage: no floor grid, no particle dust — the solid
+            canvas plus real shadows (light) / glow (dark) carry the ground. */}
         <Tracker />
         <Collar3D />
+        <CityScape3D />
         <KsaMap3D />
 
         {/* Bloom belongs to the dark ops room only: on a light canvas the
@@ -239,10 +241,6 @@ export function Experience(): JSX.Element {
             </EffectComposer>
           ))}
       </Canvas>
-
-      {/* Atmospheric wash over the render — emerald/navy radials + ground
-          haze in daylight, nothing in the dark ops room (tokens in CSS). */}
-      <div className="stage-atmo" />
     </div>
   );
 }

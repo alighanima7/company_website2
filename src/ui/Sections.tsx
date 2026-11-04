@@ -3,7 +3,7 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useEffect } from "react";
 import type { JSX } from "react";
 
-import { AI_EVENTS, BRAND, COLLAR_SENSORS, CONTACT, COPY, DOMAINS, STATS } from "../content";
+import { AI_EVENTS, BRAND, CITY_FEATURES, COLLAR_SENSORS, CONTACT, COPY, DOMAINS, STATS } from "../content";
 import { useLocale } from "../locale";
 import { Counter } from "./Counter";
 
@@ -109,7 +109,29 @@ export function Sections(): JSX.Element {
         </div>
       </section>
 
-      {/* ── 04 · NETWORK ──────────────────────────────────────────────── */}
+      {/* ── 04 · SMART CITY (IoT micro-district) ──────────────────────── */}
+      <section className="section section-city">
+        <div className="sticky-inner">
+          <div className="copy-block end">
+            <p className="kicker mono reveal">{COPY.city.kicker}</p>
+            <h2 className="reveal">
+              {COPY.city.h2a[l]}
+              <br />
+              {COPY.city.h2b[l]}
+            </h2>
+            <p className="lead reveal">{COPY.city.lead[l]}</p>
+            <div className="chips reveal" style={{ marginTop: 18 }}>
+              {CITY_FEATURES.map((feature) => (
+                <span className="chip" key={feature.en}>
+                  {feature[l]}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 05 · NETWORK ──────────────────────────────────────────────── */}
       <section className="section section-network">
         <div className="sticky-inner">
           <div className="copy-block center">

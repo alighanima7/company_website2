@@ -5,6 +5,7 @@ import type { JSX } from "react";
 
 import { AI_EVENTS, BRAND, CITY_FEATURES, COLLAR_SENSORS, CONTACT, COPY, DOMAINS, STATS } from "../content";
 import { useLocale } from "../locale";
+import { viewport } from "../responsive";
 import { Counter } from "./Counter";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -34,6 +35,12 @@ export function Sections(): JSX.Element {
       // trigger and never reveal at all.
       const clampIt = el.closest(".section-outro") !== null;
       const edge = (v: string): string => (clampIt ? `clamp(${v})` : v);
+      // Mobile panels dock to the BOTTOM of the sticky frame (stacked
+      // layout), so they live lower in the viewport than the centered
+      // desktop panels — reveal earlier or the hero loads half-faded and
+      // arriving panels flash as empty cards.
+      const start = viewport.isMobile ? "top 96%" : "top 86%";
+      const end = viewport.isMobile ? "top 76%" : "top 58%";
       return gsap.fromTo(
         el,
         { autoAlpha: 0, y: 44 },
@@ -41,12 +48,35 @@ export function Sections(): JSX.Element {
           autoAlpha: 1,
           y: 0,
           ease: "none",
-          scrollTrigger: { trigger: el, start: edge("top 86%"), end: edge("top 58%"), scrub: true },
+          scrollTrigger: { trigger: el, start: edge(start), end: edge(end), scrub: true },
         },
       );
     });
+    // Mobile only: once a section's sticky hold ends, its full-width panel
+    // would drift straight up ACROSS the 3D beat (desktop panels exit on
+    // their own side instead). Scrub the whole panel to transparent right
+    // at the hand-off — reversible, so scrolling back restores it.
+    const fades = viewport.isMobile
+      ? gsap.utils.toArray<HTMLElement>(".section .copy-block, .section .hero-block").map((el) =>
+          gsap.fromTo(
+            el,
+            { autoAlpha: 1 },
+            {
+              autoAlpha: 0,
+              ease: "none",
+              scrollTrigger: {
+                trigger: el.closest(".section") ?? el,
+                start: "bottom bottom", // = the sticky release point
+                end: "bottom 55%",
+                scrub: true,
+              },
+            },
+          ),
+        )
+      : [];
+
     return () => {
-      tweens.forEach((tween) => {
+      [...tweens, ...fades].forEach((tween) => {
         tween.scrollTrigger?.kill();
         tween.kill();
       });

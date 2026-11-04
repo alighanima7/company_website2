@@ -42,7 +42,9 @@ export function Hud(): JSX.Element {
   useEffect(() => {
     const update = (): void => {
       const p = scrollState.current;
-      if (fillRef.current !== null) fillRef.current.style.transform = `scaleY(${String(Math.max(0.002, p))})`;
+      // Progress as a custom property: the stylesheet maps it to scaleY on
+      // the desktop vertical rail and scaleX on the mobile horizontal one.
+      if (fillRef.current !== null) fillRef.current.style.setProperty("--p", String(Math.max(0.002, p)));
       if (cueRef.current !== null) cueRef.current.style.opacity = String(Math.max(0, 1 - p * 14));
 
       const index = phaseIndex(p);

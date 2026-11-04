@@ -6,6 +6,7 @@ import * as THREE from "three";
 
 import { CITY_CALLOUTS, PHASES } from "../content";
 import { useLocale } from "../locale";
+import { useIsMobile } from "../responsive";
 import { clamp01, lerp, phase, scrollState } from "../scroll";
 import { SCENE, useTheme } from "../theme";
 
@@ -94,6 +95,7 @@ export function CityScape3D(): JSX.Element {
   const labelRefs = useRef<Array<HTMLDivElement | null>>([]);
   const mode = useTheme();
   const locale = useLocale();
+  const isMobile = useIsMobile();
 
   const mats = useMemo(() => {
     const P = SCENE[mode];
@@ -184,8 +186,17 @@ export function CityScape3D(): JSX.Element {
     const callout = CITY_CALLOUTS[index];
     const anchor = CALLOUT_ANCHORS[id];
     if (callout === undefined || anchor === undefined) return null;
+    // Mobile: anchors ride in closer and chips render smaller — the ring of
+    // cards must fit a frame barely wider than the district platform.
+    const squeezeXZ = isMobile ? 0.72 : 1;
+    const squeezeY = isMobile ? 0.9 : 1;
     return (
-      <Html center distanceFactor={5.5} position={[anchor[0], anchor[1], anchor[2]]} zIndexRange={[20, 11]}>
+      <Html
+        center
+        distanceFactor={isMobile ? 4.5 : 5.5}
+        position={[anchor[0] * squeezeXZ, anchor[1] * squeezeY, anchor[2] * squeezeXZ]}
+        zIndexRange={[20, 11]}
+      >
         <div
           className="callout"
           ref={(el) => {

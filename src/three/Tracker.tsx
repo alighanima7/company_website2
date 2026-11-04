@@ -6,6 +6,7 @@ import * as THREE from "three";
 
 import { PART_CALLOUTS, PHASES } from "../content";
 import { useLocale } from "../locale";
+import { useIsMobile, viewport } from "../responsive";
 import { clamp01, lerp, phase, scrollState } from "../scroll";
 import { SCENE, useTheme } from "../theme";
 
@@ -97,6 +98,7 @@ export function Tracker(): JSX.Element {
   const pcbTexture = useMemo(makePcbTexture, []);
   const mode = useTheme();
   const locale = useLocale();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     return () => {
@@ -188,12 +190,16 @@ export function Tracker(): JSX.Element {
       g.rotation.x = Math.sin(t * 0.5) * 0.04 + lerp(0, 0.5, hub);
     }
 
+    // Mobile: the narrow frame can't afford the full lateral blast radius —
+    // pull the exploded offsets in so every part (and its callout chip)
+    // stays inside the phone viewport.
+    const spread = viewport.isMobile ? 0.72 : 1;
     PARTS.forEach((part, i) => {
       const node = partRefs.current[i];
       if (node === undefined || node === null) return;
       // Per-part stagger inside the teardown window.
       const e = clamp01((explode - part.stagger * 0.35) / 0.65);
-      const eased = e * e * (3 - 2 * e);
+      const eased = e * e * (3 - 2 * e) * spread;
       const back = 1 - inE;
       node.position.set(
         part.rest[0] + part.apart[0] * eased + part.from[0] * back,
@@ -227,8 +233,10 @@ export function Tracker(): JSX.Element {
     const index = PART_CALLOUTS.findIndex((c) => c.id === id);
     const callout = PART_CALLOUTS[index];
     if (callout === undefined) return null;
+    // Mobile chips render smaller (and compact via CSS) so they ring the
+    // hardware without covering it.
     return (
-      <Html center distanceFactor={5.5} zIndexRange={[20, 11]}>
+      <Html center distanceFactor={isMobile ? 4.5 : 5.5} zIndexRange={[20, 11]}>
         <div
           className="callout"
           ref={(el) => {

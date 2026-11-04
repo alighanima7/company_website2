@@ -6,6 +6,7 @@ import * as THREE from "three";
 
 import { CITIES, KSA_OUTLINE, PHASES } from "../content";
 import { useLocale } from "../locale";
+import { viewport } from "../responsive";
 import { clamp01, lerp, phase, scrollState } from "../scroll";
 import { SCENE, useTheme } from "../theme";
 
@@ -101,9 +102,13 @@ function heightAt(px: number, py: number): number {
   return Math.max(0, (sarawat + tabuk + najd + 0.055 + ripple) * eastSlope * feather);
 }
 
-/** Non-indexed low-poly grid clipped to the Kingdom outline. Built once. */
+/** Non-indexed low-poly grid clipped to the Kingdom outline. Built once.
+ *  PERF: the point-in-polygon test per cell corner dominates first paint —
+ *  touch devices get a coarser grid (6 vs 4), which halves both the build
+ *  time and the triangle count with no visible loss at phone size. Keyed on
+ *  the input (coarse pointer), not the width, so rotation never rebuilds. */
 function buildTerrainGeometry(): THREE.BufferGeometry {
-  const STEP = 4; // projection units per cell (~0.12 world — crisp facets)
+  const STEP = viewport.coarse ? 6 : 4; // projection units per cell (~0.12 world at 4 — crisp facets)
   const positions: number[] = [];
   const S = MAP_SCALE;
   const lift = (px: number, py: number): [number, number, number] => [
@@ -245,6 +250,9 @@ export function KsaMap3D(): JSX.Element {
     const settle = 1 - Math.pow(1 - rise, 3);
     const g = root.current;
     if (g !== null) {
+      // Phones: the slab is ~12 world units wide — shrink it to fit the
+      // narrow frame instead of dollying the lens even deeper into the fog.
+      g.scale.setScalar(viewport.isMobile ? 0.62 : 1);
       g.position.y = lerp(-5.2, -1.3, settle);
       g.visible = rise > 0.001;
       g.rotation.y = Math.sin(t * 0.05) * 0.02;

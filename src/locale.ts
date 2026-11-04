@@ -54,9 +54,10 @@ export function setLocale(next: Locale): void {
   });
 
   // Text metrics changed → section heights changed. The scroll system's
-  // debounced resize path re-syncs PHASES, refreshes ScrollTrigger and
-  // restores scrollY exactly.
-  window.dispatchEvent(new Event("resize"));
+  // debounced refresh re-syncs PHASES, refreshes ScrollTrigger and restores
+  // scrollY exactly. (A dedicated event, NOT a synthetic resize: the mobile
+  // resize path ignores same-width events to survive URL-bar jitter.)
+  window.dispatchEvent(new Event("nns:refresh"));
 }
 
 export function subscribeLocale(listener: () => void): () => void {

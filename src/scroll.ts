@@ -75,10 +75,19 @@ export function initScroll(): () => void {
     // Resting pose mid-experience so the hero copy AND the map both read.
     scrollState.target = 0;
     scrollState.current = 0;
-    return () => undefined;
+    // Locale switches still re-measure the phase boundaries.
+    window.addEventListener("nns:refresh", syncPhases);
+    return () => {
+      window.removeEventListener("nns:refresh", syncPhases);
+    };
   }
 
-  const lenis = new Lenis({ duration: 1.1, smoothWheel: true });
+  // Touch stays NATIVE (syncTouch off): the OS keeps its own momentum and
+  // edge behavior, so a finger on the full-viewport canvas scrolls the page
+  // exactly like a finger anywhere else — Lenis only virtualizes the WHEEL.
+  // The master trigger below still scrubs from whatever scroll position the
+  // browser lands on, so the 3D film follows touch flicks 1:1.
+  const lenis = new Lenis({ duration: 1.1, smoothWheel: true, syncTouch: false });
   lenis.on("scroll", ScrollTrigger.update);
   const tick = (time: number): void => {
     lenis.raf(time * 1000);
@@ -112,17 +121,31 @@ export function initScroll(): () => void {
   void document.fonts.ready.then(hardRefresh);
 
   let resizeTimer: number | undefined;
-  const onResize = (): void => {
+  const scheduleRefresh = (): void => {
     window.clearTimeout(resizeTimer);
     resizeTimer = window.setTimeout(hardRefresh, 200);
   };
+  // Phone URL-bar show/hide fires HEIGHT-only resizes mid-flick; the layout
+  // is vh/svh-stable there, so re-measuring would only stutter the scrub.
+  // A width change (rotation, split-screen) is a real re-layout.
+  const coarse = window.matchMedia("(pointer: coarse)").matches;
+  let lastWidth = window.innerWidth;
+  const onResize = (): void => {
+    if (coarse && window.innerWidth === lastWidth) return;
+    lastWidth = window.innerWidth;
+    scheduleRefresh();
+  };
   window.addEventListener("resize", onResize);
+  // Locale switches change text metrics (and therefore section heights)
+  // WITHOUT changing the viewport — they ask for a refresh explicitly.
+  window.addEventListener("nns:refresh", scheduleRefresh);
 
   // Expose for automated verification (scroll-to-fraction in tests).
   (window as unknown as { __lenis?: Lenis }).__lenis = lenis;
 
   return () => {
     window.removeEventListener("resize", onResize);
+    window.removeEventListener("nns:refresh", scheduleRefresh);
     window.removeEventListener("load", onLoad);
     window.clearTimeout(resizeTimer);
     master.kill();

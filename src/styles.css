@@ -114,6 +114,9 @@
 html {
   color-scheme: light;
   scrollbar-color: var(--scrollbar) transparent;
+  /* Mobile: pull-to-refresh / overscroll glow fight the scroll scrub —
+     contain keeps the gesture inside the document. */
+  overscroll-behavior-y: contain;
 }
 html[data-theme="dark"] {
   color-scheme: dark;
@@ -147,6 +150,14 @@ body {
   position: fixed;
   inset: 0;
   z-index: 0;
+}
+
+/* The full-viewport canvas must never capture vertical pan gestures —
+   scrolling IS the interaction model on touch. (R3F doesn't set
+   touch-action itself; this pins that contract.) */
+.stage,
+.stage canvas {
+  touch-action: pan-y pinch-zoom;
 }
 
 .sections {
@@ -265,7 +276,9 @@ body {
   inset: 0;
   background: linear-gradient(to bottom, var(--emerald-bright), var(--ice));
   transform-origin: top;
-  transform: scaleY(0);
+  /* --p (0..1) is written by Hud.tsx on the GSAP ticker; the mobile media
+     query remaps the same value onto the horizontal rail via scaleX. */
+  transform: scaleY(var(--p, 0.002));
 }
 
 .hud-tick {
@@ -448,6 +461,9 @@ body {
   position: sticky;
   top: 0;
   min-height: 100vh;
+  /* Small-viewport units keep the sticky frame stable while mobile URL
+     bars expand/collapse (the copy never hides behind browser chrome). */
+  min-height: 100svh;
   display: flex;
   align-items: center;
   padding: 0 clamp(20px, 7vw, 110px);
@@ -754,18 +770,156 @@ a:focus-visible {
   outline-offset: 3px;
 }
 
-/* ── Responsive ───────────────────────────────────────────────────────── */
+/* ── Responsive ───────────────────────────────────────────────────────────
+   Tiers mirror src/responsive.ts EXACTLY (the 3D rig reads the same cuts):
+   phone < 768 · tablet 768–1023 · desktop ≥ 1024. Phones trade the
+   side-by-side composition for a vertical stack: the camera tilt in
+   Experience.tsx parks each model in the TOP half of the frame, and the
+   copy panels dock to the bottom edge below it.                          */
 
-@media (max-width: 760px) {
-  .hud-brand { inset-inline-start: 22px; }
-  .hud-brand-en { display: none; }
-  .hud-phase { inset-inline-end: 22px; }
-  .hud-rail { display: none; }
-  .theme-toggle { top: 70px; inset-inline-end: 20px; }
-  .lang-toggle { top: 120px; inset-inline-end: 20px; }
-  .copy-block,
-  .copy-block.end { margin-inline: 0; max-width: 100%; }
+/* ── Touch ergonomics — ANY coarse-pointer device, portrait or not ────── */
+
+@media (pointer: coarse) {
+  /* ≥44px touch targets (Apple HIG / Material minimum). */
+  .theme-toggle,
+  .lang-toggle {
+    width: 46px;
+    height: 46px;
+  }
+  .contact-item { min-height: 44px; }
+  /* Kill the 300ms double-tap-zoom delay on the real controls. */
+  .theme-toggle,
+  .lang-toggle,
+  .contact-item,
+  .sections a {
+    touch-action: manipulation;
+  }
+  /* Hover lifts mean nothing to a finger — they just leave stuck states. */
+  .theme-toggle:hover,
+  .lang-toggle:hover { transform: none; }
+  .domain:hover { transform: none; }
+}
+
+/* ── md: tablets (768–1023px) — side-by-side survives, panels tighten ─── */
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .hud-brand { inset-inline-start: 26px; }
+  .hud-phase { inset-inline-end: 26px; }
+  .hud-rail { inset-inline-end: 16px; }
+  .theme-toggle,
+  .lang-toggle { inset-inline-end: 26px; }
+  .copy-block { max-width: 460px; padding: 26px 28px; }
+  .copy-block.center { max-width: 640px; }
+  .hero-block { max-width: 520px; }
+  html[lang="en"] .hero-block { max-width: 560px; }
+}
+
+/* ── sm: phones (<768px) — vertical stack, compact HUD, chip callouts ─── */
+
+@media (max-width: 767px) {
+  /* ── Stacked layout: 3D beat on top, copy docked to the bottom ──────── */
   .section { min-height: 140vh; }
+  .section-hero { min-height: 130vh; }
+  .sticky-inner {
+    align-items: flex-end;
+    padding: 76px 16px calc(44px + env(safe-area-inset-bottom));
+  }
+  .hero-block { margin-top: 0; max-width: 100%; }
+  html[lang="en"] .hero-block { max-width: 100%; }
+
+  .copy-block,
+  .copy-block.end,
+  .copy-block.center {
+    margin-inline: 0;
+    width: 100%;
+    max-width: 100%;
+    padding: 18px 16px 20px;
+  }
+
+  /* ── Type ramp sized to a 320–430px line length ─────────────────────── */
+  h1 { margin-top: 16px; font-size: clamp(28px, 8.4vw, 38px); line-height: 1.25; }
+  html[lang="en"] h1 { font-size: clamp(23px, 7vw, 31px); line-height: 1.15; }
+  h2 { margin-top: 10px; font-size: clamp(22px, 6.4vw, 29px); line-height: 1.32; }
+  html[lang="en"] h2 { font-size: clamp(20px, 5.8vw, 27px); }
+  .sub { margin-top: 12px; font-size: 14px; line-height: 1.8; }
+  .lead { margin-top: 10px; font-size: 13.5px; line-height: 1.8; }
+  .eyebrow { font-size: 11px; padding: 6px 11px; }
+
+  .chips { gap: 6px; }
+  .chip { font-size: 11px; padding: 5px 10px; }
+  .stats { margin-top: 20px; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .stat { padding: 12px 8px 10px; }
+  .ai-groups { margin-top: 18px; gap: 14px; }
+
+  .outro-inner { padding: 12vh 16px 48px; gap: 14px; }
+  .domain { min-height: 200px; padding: 14px; }
+
+  /* ── Compact fixed top bar: brand start · toggles end, one row ──────── */
+  .frame-corner { display: none; }
+  .hud-brand {
+    top: calc(16px + env(safe-area-inset-top));
+    inset-inline-start: 16px;
+    gap: 8px;
+  }
+  .hud-shield { width: 26px; height: 26px; }
+  .hud-brand-name { font-size: 13px; }
+  .hud-brand-en { display: none; }
+  .theme-toggle {
+    top: calc(12px + env(safe-area-inset-top));
+    inset-inline-end: 14px;
+  }
+  .lang-toggle {
+    top: calc(12px + env(safe-area-inset-top));
+    inset-inline-end: 68px; /* 14 + 46 + 8 — beside the theme toggle */
+  }
+  .hud-phase {
+    top: calc(66px + env(safe-area-inset-top));
+    inset-inline-end: 16px;
+  }
+  .hud-cue,
+  .hud-exp { display: none; }
+
+  /* ── 7-phase step indicator: slim horizontal rail along the bottom ──── */
+  .hud-rail {
+    top: auto;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    inset-inline: 18px;
+    translate: 0 0;
+    height: auto;
+    flex-direction: row;
+  }
+  .hud-rail-track {
+    width: auto;
+    height: 1px;
+    margin-inline: 0;
+    margin-block: auto;
+  }
+  .hud-rail-fill {
+    background: linear-gradient(to right, var(--emerald-bright), var(--ice));
+    transform: scaleX(var(--p, 0.002));
+    transform-origin: left center;
+  }
+  html[dir="rtl"] .hud-rail-fill {
+    background: linear-gradient(to left, var(--emerald-bright), var(--ice));
+    transform-origin: right center;
+  }
+
+  /* ── 3D callouts collapse into compact chips hugging their anchors ──── */
+  .callout {
+    min-width: 0;
+    /* drei <Html> children are absolutely positioned — without an intrinsic
+       width they'd collapse to one word per line. */
+    width: max-content;
+    max-width: 150px;
+    padding: 6px 9px;
+    gap: 2px;
+    border-inline-start-width: 2px;
+  }
+  .callout-en { font-size: 8.5px; letter-spacing: 0.12em; }
+  .callout-ar { font-size: 10.5px; white-space: normal; line-height: 1.45; }
+  .callout-spec { display: none; }
+  .city-ar { font-size: 12px; }
+  .city-en { font-size: 7px; letter-spacing: 0.2em; }
 }
 
 /* ── Reduced motion: everything readable, nothing required to move ───── */

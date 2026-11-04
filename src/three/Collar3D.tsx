@@ -6,6 +6,7 @@ import * as THREE from "three";
 
 import { COLLAR_CALLOUTS, PHASES } from "../content";
 import { useLocale } from "../locale";
+import { useIsMobile, viewport } from "../responsive";
 import { clamp01, lerp, phase, scrollState } from "../scroll";
 import { SCENE, useTheme } from "../theme";
 
@@ -92,6 +93,7 @@ export function Collar3D(): JSX.Element {
   const labelRefs = useRef<Array<HTMLDivElement | null>>([]);
   const mode = useTheme();
   const locale = useLocale();
+  const isMobile = useIsMobile();
 
   const bandGeometry = useMemo(makeBandGeometry, []);
   useEffect(() => {
@@ -158,12 +160,15 @@ export function Collar3D(): JSX.Element {
     }
 
     // Teardown: radial separation with stagger, then re-seat before exit.
+    // Mobile pulls the radial blast in — the collar plus its exploded parts
+    // must fit a frame barely wider than the band itself.
     const explode = phase(lp, 0.3, 0.6) * (1 - phase(lp, 0.72, 0.88));
+    const spread = viewport.isMobile ? 0.72 : 1;
     PARTS.forEach((part, i) => {
       const node = partRefs.current[i];
       if (node === undefined || node === null) return;
       const e = clamp01((explode - part.stagger * 0.3) / 0.7);
-      const eased = e * e * (3 - 2 * e);
+      const eased = e * e * (3 - 2 * e) * spread;
       node.position.set(
         part.rest[0] + part.apart[0] * eased,
         part.rest[1] + part.apart[1] * eased,
@@ -185,8 +190,16 @@ export function Collar3D(): JSX.Element {
     const index = COLLAR_CALLOUTS.findIndex((c) => c.id === id);
     const callout = COLLAR_CALLOUTS[index];
     if (callout === undefined) return null;
+    // Mobile: chips hug their parts (compact CSS + smaller scale) so none
+    // of them parks outside the narrow frame.
+    const squeeze = isMobile ? 0.8 : 1;
     return (
-      <Html center distanceFactor={5.5} position={[anchor[0], anchor[1], anchor[2]]} zIndexRange={[20, 11]}>
+      <Html
+        center
+        distanceFactor={isMobile ? 4.5 : 5.5}
+        position={[anchor[0] * squeeze, anchor[1] * squeeze, anchor[2] * squeeze]}
+        zIndexRange={[20, 11]}
+      >
         <div
           className="callout"
           ref={(el) => {

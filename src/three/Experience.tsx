@@ -7,6 +7,7 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 
 import { PHASES } from "../content";
 import { getLocale } from "../locale";
+import { MOBILE_MAX_PX, TABLET_MAX_PX, useIsMobile, viewport } from "../responsive";
 import { clamp01, dampScroll, lerp, scrollState } from "../scroll";
 import { getTheme, SCENE, useTheme } from "../theme";
 import { CityScape3D } from "./CityScape3D";
@@ -99,8 +100,46 @@ function sampleCamera(p: number, outPos: THREE.Vector3, outLook: THREE.Vector3):
   );
 }
 
+interface FrameFit {
+  /** Vertical FOV — phones get a wider lens for the narrow portrait frame. */
+  readonly fov: number;
+  /** Dolly factor along the view axis (1 = the authored distance). */
+  readonly dolly: number;
+  /** How much of the side-by-side X offset survives (1 = full, 0 = centered). */
+  readonly sideX: number;
+  /** Downward camera tilt (radians) that parks the model in the UPPER part
+   *  of the frame while the copy stacks underneath. */
+  readonly tilt: number;
+}
+
+/** Responsive lens, mirroring the styles.css breakpoints: phones trade the
+ *  authored side-by-side framing for a stacked one — side offsets compress
+ *  toward center, the camera dollies straight back so wide beats (the
+ *  exploded teardown, the Kingdom slab) clear the frame, and a small
+ *  downward tilt lifts every act into the top half of the screen. Tablets
+ *  get a gentler version; desktop is the authored film, untouched. */
+function fitFor(width: number, height: number): FrameFit {
+  const aspect = width / Math.max(1, height);
+  if (width <= MOBILE_MAX_PX) {
+    // The narrower the portrait aspect, the longer the extra dolly —
+    // a 375px phone needs more headroom than a 414px one.
+    const narrow = Math.min(1.6, Math.max(1, 1 + (1 - aspect) * 0.6));
+    return { fov: 54, dolly: 1.12 * narrow, sideX: 0.3, tilt: -0.16 };
+  }
+  if (width <= TABLET_MAX_PX) return { fov: 46, dolly: 1.08, sideX: 0.72, tilt: -0.05 };
+  return { fov: 42, dolly: 1, sideX: 1, tilt: 0 };
+}
+
 function CameraRig(): null {
   const camera = useThree((s) => s.camera);
+  const size = useThree((s) => s.size);
+  const fit = useMemo(() => fitFor(size.width, size.height), [size.width, size.height]);
+
+  useEffect(() => {
+    const persp = camera as THREE.PerspectiveCamera;
+    persp.fov = fit.fov;
+    persp.updateProjectionMatrix();
+  }, [camera, fit.fov]);
 
   useFrame((state, dt) => {
     syncCamKeys();
@@ -111,11 +150,19 @@ function CameraRig(): null {
     // the panels mirror via CSS logical properties — mirroring the camera's
     // X keeps every model on the side OPPOSITE its panel in both locales.
     const mx = getLocale() === "en" ? -1 : 1;
-    // A breath of parallax from the pointer keeps held frames alive.
-    const px = state.pointer.x * 0.25;
-    const py = state.pointer.y * 0.15;
-    camera.position.set(POS.x * mx + px, POS.y - py, POS.z);
-    camera.lookAt(LOOK.x * mx, LOOK.y, LOOK.z);
+    // A breath of parallax from the pointer keeps held frames alive —
+    // desktop only: on touch the pointer freezes wherever the last tap
+    // landed, which would hold the whole film permanently off-axis.
+    const px = viewport.coarse ? 0 : state.pointer.x * 0.25;
+    const py = viewport.coarse ? 0 : state.pointer.y * 0.15;
+    LOOK.set(LOOK.x * mx * fit.sideX, LOOK.y, LOOK.z);
+    POS.set(POS.x * mx * fit.sideX + px, POS.y - py, POS.z);
+    // True dolly: back the camera away from its look target along the view
+    // axis, so every authored angle survives the responsive re-framing.
+    POS.sub(LOOK).multiplyScalar(fit.dolly).add(LOOK);
+    camera.position.copy(POS);
+    camera.lookAt(LOOK);
+    if (fit.tilt !== 0) camera.rotateX(fit.tilt);
   });
 
   return null;
@@ -128,6 +175,7 @@ function StudioEnvironment(): null {
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
   const mode = useTheme();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const pmrem = new THREE.PMREMGenerator(gl);
@@ -148,8 +196,10 @@ function StudioEnvironment(): null {
     gl.toneMapping = THREE.ACESFilmicToneMapping;
     gl.toneMappingExposure = p.exposure;
     scene.environmentIntensity = p.envIntensity;
-    scene.fog = new THREE.FogExp2(p.fog, p.fogDensity);
-  }, [gl, scene, mode]);
+    // The mobile rig dollies the camera further out — ease the exponential
+    // fog so the far beats (the Kingdom slab) stay as crisp as on desktop.
+    scene.fog = new THREE.FogExp2(p.fog, p.fogDensity * (isMobile ? 0.72 : 1));
+  }, [gl, scene, mode, isMobile]);
 
   return null;
 }
@@ -157,7 +207,10 @@ function StudioEnvironment(): null {
 export function Experience(): JSX.Element {
   const mode = useTheme();
   const p = SCENE[mode];
+  const isMobile = useIsMobile();
 
+  // Bloom/vignette are desktop-only already (pointer: fine) — on phones the
+  // composer passes alone would eat the 60fps budget.
   const effectsOn = useMemo(
     () =>
       typeof window !== "undefined" &&
@@ -166,10 +219,19 @@ export function Experience(): JSX.Element {
     [],
   );
 
+  // PERF (mobile): cap the render resolution at 1.5× — full 2–3× retina
+  // ratios melt phone GPUs (thermal throttle → dropped frames, battery
+  // drain) for no visible gain at phone viewing distance. Desktop keeps
+  // the authored [1, 2] range.
+  const dpr = useMemo<number | [number, number]>(
+    () => (isMobile ? Math.min(window.devicePixelRatio, 1.5) : ([1, 2] as [number, number])),
+    [isMobile],
+  );
+
   return (
     <div className="stage" aria-hidden="true">
       <Canvas
-        dpr={[1, 2]}
+        dpr={dpr}
         shadows
         camera={{ fov: 42, near: 0.1, far: 70, position: [0, 0.55, 7.6] }}
         gl={{ antialias: true, powerPreference: "high-performance" }}
@@ -191,7 +253,7 @@ export function Experience(): JSX.Element {
           intensity={p.keyIntensity}
           color={p.keyColor}
           castShadow={p.shadows}
-          shadow-mapSize={[1024, 1024]}
+          shadow-mapSize={isMobile ? [512, 512] : [1024, 1024]}
           shadow-camera-left={-10}
           shadow-camera-right={10}
           shadow-camera-top={10}

@@ -1,20 +1,29 @@
 import { Html, Line } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { JSX } from "react";
 import * as THREE from "three";
+import type { Line2, LineSegments2 } from "three-stdlib";
 
-import { CITIES, KSA_OUTLINE, PHASES } from "../content";
+import { CITIES, KSA_OUTLINE } from "../content";
+import { homeScroll } from "../homeScroll";
 import { useLocale } from "../locale";
+import { clamp01, lerp, motionState, phase } from "../motion";
 import { viewport } from "../responsive";
-import { clamp01, lerp, phase, scrollState } from "../scroll";
 import { SCENE, useTheme } from "../theme";
 
 /**
  * The Kingdom as a dark glass slab: the production radar's hand projection
  * extruded into 3D, with the five operating cities as light beacons wired to
- * the Riyadh hub, and a security scan ring that sweeps the surface during the
- * AI phase. Rises from below the fold as the network phase begins.
+ * the Riyadh hub, and a security scan ring sweeping the surface.
+ *
+ * Acts 1–2 of the Home depth film: parked DEEP on the Z-axis at load (a
+ * dim, unlit landmass behind the foreground logo, softened by the fog),
+ * it advances along Z to its stage plane as the scroll passage plays,
+ * ignites its beacons with stagger on arrival, draws the hub arcs, then
+ * holds the stage with the scan sweeping. Every beat keys off
+ * homeScroll.current, so scrubbing back replays it in reverse. Reduced
+ * motion maps the scroll directly with pulses and sweep stilled.
  */
 
 const MAP_SCALE = 1 / 34; // 400×360 source units → ~11.7×10.5 world units
@@ -143,8 +152,12 @@ export function KsaMap3D(): JSX.Element {
   const ringRefs = useRef<Array<THREE.Mesh | null>>([]);
   const scanRef = useRef<THREE.Mesh>(null);
   const scanMatRef = useRef<THREE.MeshBasicMaterial>(null);
-  const arcRefs = useRef<Array<{ material?: { dashOffset: number; opacity: number } } | null>>([]);
+  const arcRefs = useRef<Array<Line2 | LineSegments2 | null>>([]);
   const labelRefs = useRef<Array<HTMLDivElement | null>>([]);
+  // City-label <Html> portals mount only once the passage brings the slab
+  // toward the stage — Act 0 never pays their per-frame transform cost.
+  const [labelsLive, setLabelsLive] = useState(false);
+  const labelsLiveRef = useRef(false);
 
   /* ── Geometry (built once) ──────────────────────────────────────────── */
   const { slabGeometry, edgeGeometry } = useMemo(() => {
@@ -241,26 +254,41 @@ export function KsaMap3D(): JSX.Element {
     });
   }, []);
 
-  /* ── Per-frame choreography ─────────────────────────────────────────── */
+  /* ── Per-frame choreography: scroll-staged depth emergence ──────────── */
   useFrame((state) => {
-    const p = scrollState.reduced ? (PHASES.cityEnd + PHASES.networkEnd) / 2 : scrollState.current;
     const t = state.clock.elapsedTime;
+    const reduced = motionState.reduced;
+    const p = homeScroll.current;
 
-    const rise = phase(p, PHASES.cityEnd, PHASES.cityEnd + 0.14);
-    const settle = 1 - Math.pow(1 - rise, 3);
-    const g = root.current;
-    if (g !== null) {
-      // Phones: the slab is ~12 world units wide — shrink it to fit the
-      // narrow frame instead of dollying the lens even deeper into the fog.
-      g.scale.setScalar(viewport.isMobile ? 0.62 : 1);
-      g.position.y = lerp(-5.2, -1.3, settle);
-      g.visible = rise > 0.001;
-      g.rotation.y = Math.sin(t * 0.05) * 0.02;
+    // The passage, all on the Z-axis: deep park → stage plane. Ignition
+    // and linking trail the arrival so the map lights up AS it lands.
+    const emerge = phase(p, 0.38, 0.82);
+    const ignite = phase(p, 0.6, 0.95);
+    const link = phase(p, 0.66, 0.98);
+
+    const live = p > 0.55;
+    if (live !== labelsLiveRef.current) {
+      labelsLiveRef.current = live;
+      setLabelsLive(live);
     }
 
-    // Beacons ignite with stagger across the network window.
-    const ignite = phase(p, PHASES.cityEnd + 0.06, PHASES.networkEnd);
-    CITIES.forEach((city, i) => {
+    const g = root.current;
+    if (g !== null) {
+      g.visible = true;
+      // Composition slot: constant height and scale — depth alone carries
+      // the drama. Phones shrink the slab to the narrow frame instead of
+      // dollying the lens deeper into the fog.
+      g.scale.setScalar(viewport.isMobile ? 0.52 : 0.8);
+      g.position.set(
+        0,
+        viewport.isMobile ? -1.08 : -1.62,
+        lerp(viewport.isMobile ? -6.4 : -7.5, -0.5, emerge),
+      );
+      g.rotation.y = reduced ? 0 : Math.sin(t * 0.05) * 0.02;
+    }
+
+    // Beacons ignite with stagger as the slab reaches its stage plane.
+    CITIES.forEach((_city, i) => {
       const local = clamp01(ignite * 1.6 - i * 0.14);
       const beacon = beaconRefs.current[i];
       if (beacon !== undefined && beacon !== null) {
@@ -268,10 +296,10 @@ export function KsaMap3D(): JSX.Element {
       }
       const ring = ringRefs.current[i];
       if (ring !== undefined && ring !== null) {
-        const pulse = (t * 0.6 + i * 0.3) % 1;
+        const pulse = reduced ? 0.4 : (t * 0.6 + i * 0.3) % 1;
         ring.scale.setScalar(Math.max(0.0001, local * (0.4 + pulse * 1.7)));
         const material = ring.material as THREE.MeshBasicMaterial;
-        material.opacity = local * (1 - pulse) * 0.6;
+        material.opacity = reduced ? local * 0.25 : local * (1 - pulse) * 0.6;
       }
       const label = labelRefs.current[i];
       if (label !== undefined && label !== null) {
@@ -280,26 +308,34 @@ export function KsaMap3D(): JSX.Element {
     });
 
     // Arc draw-on + slow dash drift.
-    const link = phase(p, PHASES.cityEnd + 0.1, PHASES.networkEnd + 0.04);
     arcRefs.current.forEach((line, i) => {
       const material = line?.material;
       if (material !== undefined) {
         material.opacity = clamp01(link * 1.5 - i * 0.08);
-        material.dashOffset = -t * 0.35;
+        if (!reduced) material.dashOffset = -t * 0.35;
       }
     });
 
-    // Security scan: an expanding ring sweeping the slab during the AI phase.
-    const scanPhase = phase(p, PHASES.networkEnd, PHASES.aiEnd);
+    // Security scan: sweeps only once the map owns the stage (Act 2),
+    // stilled under reduced motion.
     const scan = scanRef.current;
     const scanMat = scanMatRef.current;
     if (scan !== null && scanMat !== null) {
-      const active = scanPhase > 0.01 && scanPhase < 0.999;
-      scan.visible = active;
-      const sweep = (t * 0.22) % 1;
-      const radius = lerp(0.4, 8.5, sweep);
-      scan.scale.setScalar(radius);
-      scanMat.opacity = active ? (1 - sweep) * 0.5 * clamp01(scanPhase * 4) * clamp01((1 - scanPhase) * 4 + 0.2) : 0;
+      if (reduced || p < 0.85) {
+        scan.visible = false;
+        scanMat.opacity = 0;
+      } else {
+        const cycle = (t * 0.09) % 1; // ~11s period, sweep then rest
+        const sweeping = cycle < 0.55;
+        scan.visible = sweeping;
+        if (sweeping) {
+          const sweep = cycle / 0.55;
+          scan.scale.setScalar(lerp(0.4, 8.5, sweep));
+          scanMat.opacity = (1 - sweep) * 0.42;
+        } else {
+          scanMat.opacity = 0;
+        }
+      }
     }
   });
 
@@ -352,17 +388,19 @@ export function KsaMap3D(): JSX.Element {
               <ringGeometry args={[0.3, 0.36, 40]} />
               <meshBasicMaterial color={color} transparent opacity={0} blending={P.glowBlending} depthWrite={false} />
             </mesh>
-            <Html center distanceFactor={11} position={[0, hub ? 2.15 : 1.5, 0]} zIndexRange={[20, 11]}>
-              <div
-                className="city-label"
-                ref={(el) => {
-                  labelRefs.current[i] = el;
-                }}
-              >
-                <span className="city-ar">{city.name[locale]}</span>
-                <span className="city-en">{city.code}</span>
-              </div>
-            </Html>
+            {labelsLive && (
+              <Html center distanceFactor={11} position={[0, hub ? 1.92 : 1.5, 0]} zIndexRange={[20, 11]}>
+                <div
+                  className="city-label"
+                  ref={(el) => {
+                    labelRefs.current[i] = el;
+                  }}
+                >
+                  <span className="city-ar">{city.name[locale]}</span>
+                  <span className="city-en">{city.code}</span>
+                </div>
+              </Html>
+            )}
           </group>
         );
       })}
@@ -372,7 +410,7 @@ export function KsaMap3D(): JSX.Element {
         <Line
           key={i}
           ref={(el) => {
-            arcRefs.current[i] = el as unknown as { material?: { dashOffset: number; opacity: number } };
+            arcRefs.current[i] = el;
           }}
           points={points}
           color={P.arc}

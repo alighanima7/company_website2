@@ -1,32 +1,33 @@
 import { Html, Line, RoundedBox } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { JSX } from "react";
 import * as THREE from "three";
 
-import { COLLAR_CALLOUTS, PHASES } from "../content";
+import { COLLAR_CALLOUTS } from "../content";
 import { useLocale } from "../locale";
+import { clamp01, lerp, motionState, phase } from "../motion";
 import { useIsMobile, viewport } from "../responsive";
-import { clamp01, lerp, phase, scrollState } from "../scroll";
 import { SCENE, useTheme } from "../theme";
 
 /**
- * The second hero asset: the Wild Animal Tracking smart collar, modeled
- * procedurally on the profile's own product photo (p21) — a riveted leather
- * band, dashed edge stitching, a steel buckle, curved armor plates and the
- * navy tracking module with its emerald LED.
+ * The Wild Animal Tracking smart collar, modeled procedurally on the
+ * profile's own product photo (p21) — riveted leather band, dashed edge
+ * stitching, steel buckle, curved armor plates and the navy tracking
+ * module with its emerald LED.
  *
- * Choreography (all inside the collar window teardownEnd→collarEnd):
- *   · enter   (0→0.12):  scales up from below while the device parks as hub
- *   · showcase:           scroll-scrubbed turn + gentle float
- *   · teardown (0.3→0.6): module/buckle/plates translate radially out with
- *                         callouts, then re-seat (0.72→0.88)
- *   · exit    (0.9→1):    sinks + scales away as the Kingdom map rises
+ * Products-page showcase: enters from below on mount, then loops a radial
+ * teardown on the clock — module/buckle/plates translate out with stagger
+ * while their callouts reveal one at a time, re-seat, rest, repeat.
+ * Reduced motion holds the assembled pose with a slow turn and no chips.
  */
 
 const BAND_R = 1.08; // band centerline radius
 const BAND_T = 0.05; // half thickness (radial)
 const BAND_H = 0.21; // half height (axial)
+
+/** Teardown loop period (seconds). */
+const CYCLE = 14;
 
 interface CollarPart {
   readonly id: string;
@@ -91,9 +92,15 @@ export function Collar3D(): JSX.Element {
   const spinner = useRef<THREE.Group>(null);
   const partRefs = useRef<Array<THREE.Group | null>>([]);
   const labelRefs = useRef<Array<HTMLDivElement | null>>([]);
+  // Callout portals mount only once the entrance settles — drei <Html>
+  // does per-frame transform work for as long as it exists.
+  const [calloutsLive, setCalloutsLive] = useState(false);
+  const calloutsLiveRef = useRef(false);
+  const entrance = useRef(motionState.reduced ? 1 : 0);
   const mode = useTheme();
   const locale = useLocale();
   const isMobile = useIsMobile();
+  const P = SCENE[mode];
 
   const bandGeometry = useMemo(makeBandGeometry, []);
   useEffect(() => {
@@ -102,18 +109,22 @@ export function Collar3D(): JSX.Element {
     };
   }, [bandGeometry]);
 
+  /* Collar materials ride the SCENE palette: daylight dresses the whole
+     collar in matte charcoal (band) + anodized gunmetal (plates, buckle)
+     with a mint LED and pink stitching; dark keeps the leather-and-steel
+     product-photo identity untouched. */
   const mats = useMemo(() => {
-    const P = SCENE[mode];
+    const PAL = SCENE[mode];
     return {
-      leather: new THREE.MeshStandardMaterial({ color: "#8a5733", metalness: 0.06, roughness: 0.78 }),
-      leatherDark: new THREE.MeshStandardMaterial({ color: "#5f3a20", metalness: 0.08, roughness: 0.82 }),
-      steel: new THREE.MeshStandardMaterial({ color: "#b4bfc9", metalness: 0.92, roughness: 0.3 }),
-      rivet: new THREE.MeshStandardMaterial({ color: "#46535f", metalness: 0.9, roughness: 0.38 }),
-      module: new THREE.MeshStandardMaterial({ color: P.bodyColor, metalness: P.bodyMetalness, roughness: P.bodyRoughness }),
+      leather: new THREE.MeshStandardMaterial({ color: PAL.collarBand, metalness: 0.06, roughness: 0.78 }),
+      leatherDark: new THREE.MeshStandardMaterial({ color: PAL.collarBandDark, metalness: 0.08, roughness: 0.82 }),
+      steel: new THREE.MeshStandardMaterial({ color: PAL.collarSteel, metalness: 0.92, roughness: 0.3 }),
+      rivet: new THREE.MeshStandardMaterial({ color: PAL.collarRivet, metalness: 0.9, roughness: 0.38 }),
+      module: new THREE.MeshStandardMaterial({ color: PAL.bodyColor, metalness: PAL.bodyMetalness, roughness: PAL.bodyRoughness }),
       led: new THREE.MeshStandardMaterial({
-        color: "#0c3f27",
-        emissive: "#3fd98b",
-        emissiveIntensity: P.emissiveEmerald,
+        color: PAL.ledBase,
+        emissive: PAL.ledEmissive,
+        emissiveIntensity: PAL.emissiveEmerald,
         roughness: 0.4,
       }),
     };
@@ -134,36 +145,40 @@ export function Collar3D(): JSX.Element {
     });
   }, []);
 
-  useFrame((state) => {
-    const p = scrollState.current;
+  useFrame((state, dt) => {
     const t = state.clock.elapsedTime;
-    const lp = phase(p, PHASES.teardownEnd, PHASES.collarEnd);
+    const reduced = motionState.reduced;
 
-    // Enter only after the device has re-assembled and started rising to
-    // its hub pose — the stage is handed over clean.
-    const enter = phase(lp, 0.08, 0.22);
-    const exit = phase(lp, 0.9, 1);
-    const scale = enter * (1 - exit);
+    entrance.current = Math.min(1, entrance.current + dt * 0.55);
+    const enter = 1 - Math.pow(1 - entrance.current, 3);
+
+    const live = !reduced && entrance.current >= 1;
+    if (live !== calloutsLiveRef.current) {
+      calloutsLiveRef.current = live;
+      setCalloutsLive(live);
+    }
 
     const g = root.current;
     if (g !== null) {
-      g.visible = scale > 0.012 && !scrollState.reduced;
-      g.scale.setScalar(Math.max(0.001, scale));
-      g.position.set(0, lerp(-2.4, 0.12, enter) + Math.sin(t * 0.8) * 0.045 - exit * 2.2, 0);
-      // Presentation tilt from the product photo, plus a scroll-scrubbed turn.
+      g.visible = true;
+      g.scale.setScalar(Math.max(0.001, enter));
+      const float = reduced ? 0 : Math.sin(t * 0.8) * 0.045;
+      g.position.set(0, lerp(-2.4, 0.12, enter) + float, 0);
+      // Presentation tilt from the product photo.
       g.rotation.z = 0.42;
-      g.rotation.x = 0.16 + Math.sin(t * 0.5) * 0.03;
+      g.rotation.x = 0.16 + (reduced ? 0 : Math.sin(t * 0.5) * 0.03);
     }
     const s = spinner.current;
     if (s !== null) {
-      s.rotation.y = t * 0.12 + lp * Math.PI * 1.6;
+      s.rotation.y = reduced ? t * 0.08 : t * 0.14;
     }
 
-    // Teardown: radial separation with stagger, then re-seat before exit.
-    // Mobile pulls the radial blast in — the collar plus its exploded parts
-    // must fit a frame barely wider than the band itself.
-    const explode = phase(lp, 0.3, 0.6) * (1 - phase(lp, 0.72, 0.88));
-    const spread = viewport.isMobile ? 0.72 : 1;
+    // Teardown loop: radial separation with stagger, hold, re-seat, rest.
+    // Narrow frames pull the radial blast in — the collar plus its exploded
+    // parts must fit their zone (phone stack / tablet half).
+    const cyc = reduced || !live ? 0 : (t % CYCLE) / CYCLE;
+    const explode = phase(cyc, 0.12, 0.3) * (1 - phase(cyc, 0.66, 0.84));
+    const spread = viewport.isMobile ? 0.72 : viewport.tier === "tablet" ? 0.85 : 1;
     PARTS.forEach((part, i) => {
       const node = partRefs.current[i];
       if (node === undefined || node === null) return;
@@ -176,11 +191,16 @@ export function Collar3D(): JSX.Element {
       );
     });
 
-    const labelOpacity = clamp01(explode * 1.7 - 0.25) * (1 - exit);
-    labelRefs.current.forEach((el) => {
+    // Chips reveal ONE AT A TIME across the exploded hold (per-index
+    // windows): four cards at once can't be guaranteed collision-free
+    // through the collar's continuous spin, one card always can.
+    labelRefs.current.forEach((el, i) => {
       if (el !== null) {
-        el.style.opacity = String(labelOpacity);
-        el.style.transform = `translateY(${String((1 - labelOpacity) * 8)}px)`;
+        const o =
+          phase(cyc, 0.18 + i * 0.11, 0.24 + i * 0.11) *
+          (1 - phase(cyc, 0.29 + i * 0.11, 0.32 + i * 0.11));
+        el.style.opacity = String(o);
+        el.style.transform = `translateY(${String((1 - o) * 8)}px)`;
       }
     });
   });
@@ -220,12 +240,13 @@ export function Collar3D(): JSX.Element {
         {/* Leather band + darker inner lining ring */}
         <mesh geometry={bandGeometry} material={mats.leather} />
 
-        {/* Edge stitching — two dashed thread rings */}
+        {/* Edge stitching — two dashed thread rings (cream on leather in the
+            dark theme, pink thread on the charcoal band in daylight) */}
         {STITCH_RINGS.map((points, i) => (
           <Line
             key={i}
             points={points}
-            color="#d9b98e"
+            color={P.collarStitch}
             lineWidth={1.1}
             dashed
             dashSize={0.05}
@@ -253,9 +274,11 @@ export function Collar3D(): JSX.Element {
           );
         })}
 
-        {/* Strap callout hangs WELL below the band — outside the silhouette
-            so the card never covers the leather it describes. */}
-        {calloutFor("strap", [0, -(BAND_H + 0.95), 0.75])}
+        {/* Outer-ring anchors: the four chips sit in four separate quadrants
+            around the collar's bounding box — strap deep below, module far
+            inline-right, buckle far inline-left, plate high above — so no
+            chip covers the hardware or a neighboring chip. */}
+        {calloutsLive && calloutFor("strap", [0, -(BAND_H + 1.05), 0.7])}
 
         {/* ── Module (tracking unit on steel back-plate) ── */}
         <group
@@ -278,7 +301,10 @@ export function Collar3D(): JSX.Element {
               <sphereGeometry args={[0.032, 10, 10]} />
             </mesh>
           </group>
-          {calloutFor("module", [0.85, 0.78, 0])}
+          {/* Anchors are PART-local and the parts explode outward already —
+              keep offsets modest or the chip swings past the viewport edge
+              at the worst spinner yaw (radius cap ≈ 2.6 world units). */}
+          {calloutsLive && calloutFor("module", [0.1, 0.45, 0])}
         </group>
 
         {/* ── Buckle (frame + prong + strap tongue) ── */}
@@ -307,7 +333,7 @@ export function Collar3D(): JSX.Element {
           </group>
           {/* Outside the buckle's silhouette; low enough to survive the
               part's upward explode without clipping the viewport top. */}
-          {calloutFor("buckle", [-0.9, 0.55, 0])}
+          {calloutsLive && calloutFor("buckle", [-0.2, 0.58, 0])}
         </group>
 
         {/* ── Armor plates (±z) ── */}
@@ -322,8 +348,10 @@ export function Collar3D(): JSX.Element {
               <cylinderGeometry args={[0.024, 0.024, 0.02, 10]} />
             </mesh>
           ))}
-          {/* Rings the plate from outside the collar's silhouette. */}
-          {calloutFor("plate", [0.55, 0.8, 0.95])}
+          {/* High above the collar's silhouette and pulled back toward the
+              axis (the plate itself explodes to z≈1.95 — adding more z
+              would blow the radius cap). */}
+          {calloutsLive && calloutFor("plate", [0.3, 1.3, -0.3])}
         </group>
         <group
           ref={(el) => {

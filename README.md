@@ -84,16 +84,25 @@ The 3D scene follows via `SCENE` palettes in `src/theme.ts`. Dark is a
 text and key light, Bright Terracotta `#DD8D65` CTAs, the Riyadh hub,
 network arcs and city pulses — still a glow instrument (additive
 blending + bloom) but warm instead of neon.
-Light is a **warm earthy daylight** built on a strict 5-color system:
-Warm Beige `#F4EBE1` canvas/fog/atmosphere (no glare fields), Base White
-`#FFFFFF` cards and panels, Sage Green `#2F5233` headings + brand
-accents + line work, Dark Brown `#3E332E` body text and shadows, Warm
-Terracotta `#C87A53` CTAs, links, the Riyadh hub beacon and network
-arcs. The Kingdom renders as a forest-sage slab; the device hardware
-keeps its navy alloy + emerald LEDs (product identity — reads like a
-product shot on kraft paper). ACES tone mapping, a warm key light with
-real PCF shadows onto an invisible brown-tinted catcher, warm hemisphere
-fill, normal blending (additive light and low bloom thresholds are both
-invisible-or-haze on a light canvas). DPR renders up to 2. DOM panels
-frost (`backdrop-filter`) in light only; dark keeps frost off so its
-translucent gradients don't smear the 3D callouts passing beneath.
+Light is a **pastel-pink studio** built on a strict 3-color system:
+Soft Pastel Pink `#F3C3C8` canvas/fog/atmosphere, crisp White `#FFFFFF`
+cards and panels, Deep Charcoal `#2A2A2F` headings + body text + borders
++ UI framing, and Vibrant Mint `#22E3A2` reserved for non-text accents —
+active phase ticks, the progress-rail fill, callout spines, CTA hover
+borders and glows (mint sits at ~1.07:1 against the pink canvas, so it
+never carries type; typography beside it is always charcoal). The
+hardware goes matte/anodized charcoal (`#2A2A2F`/`#1E1E22`) with mint
+LEDs and PCB traces, and the Kingdom renders as a charcoal slab with
+mint circuit-edge line work — a dark product shot popping off the pink
+backdrop. ACES tone mapping, a hot white key with real PCF shadows onto
+an invisible charcoal-tinted catcher, a mint rim light and lifted IBL,
+normal blending (additive light and low bloom thresholds are both
+invisible-or-haze on a light canvas). DPR renders up to 2. The narrative
+panels and HUD cards are glowing glassmorphism in BOTH themes: frosted
+translucent fills (`backdrop-filter: blur(20px) saturate(160%)`, with the
+`-webkit-` prefix and an `@supports` near-opaque fallback), rounded 24px
+geometry, a masked 1px luminous refraction rim (mint in light, sage →
+terracotta in dark), side edge flares inside the glass, and a gentle
+rim-luminosity breathing/hover shift (opacity-only, stilled under
+reduced motion). Anything passing beneath the glass — callouts included —
+diffuses into soft glow, which is the intended smoked-glass read.

@@ -17,10 +17,10 @@ export default defineConfig({
           // needs the wrapper) and the init order breaks with a TDZ
           // ReferenceError on load.
           fx: ["postprocessing"],
-          gsap: ["gsap", "lenis"],
         },
       },
     },
-    chunkSizeWarningLimit: 1200,
+    // three + GLTFLoader/meshopt (the tracker GLB's local decode stack).
+    chunkSizeWarningLimit: 1280,
   },
 });

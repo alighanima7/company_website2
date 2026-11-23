@@ -1,242 +1,283 @@
-import { Html, RoundedBox } from "@react-three/drei";
+import { Html, useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { JSX } from "react";
 import * as THREE from "three";
 
-import { PART_CALLOUTS, PHASES } from "../content";
+import { PART_CALLOUTS } from "../content";
 import { useLocale } from "../locale";
-import { useIsMobile, viewport } from "../responsive";
-import { clamp01, lerp, phase, scrollState } from "../scroll";
+import { lerp, motionState, phase } from "../motion";
+import { useIsMobile, useViewportTier } from "../responsive";
 import { SCENE, useTheme } from "../theme";
 
 /**
- * The hero object: a procedural NNS telematics tracker, built entirely from
- * primitives (no model files exist for this product — and a stylized,
- * manifesto-grade device reads better than a cheap photoreal one anyway).
+ * The flagship product: the NNS telematics tracker — the real hardware
+ * model (3d_model/product → public/models/tracker.glb via
+ * scripts/optimize-models.mjs: 1M→134k tris at 0.1% error, 1024px WebP,
+ * meshopt; 46MB→2.5MB). Decoding is fully local: meshopt's decoder ships
+ * inside three-stdlib and WebP is a browser codec — no CDN wasm.
  *
- * Choreography, all driven by the damped scroll value:
- *   · entrance  (load):            parts converge from scattered offsets
- *   · teardown  (PHASES hero→…):   parts translate to exploded offsets with
- *                                  per-part stagger; HUD callouts fade in
- *   · network   (…→networkEnd):    device shrinks + rises to hover as the
- *                                  "hub node" above the Kingdom
- *   · always:                      gentle float + slow yaw so it never dies
+ * Products-page showcase: the unit floats and turns continuously while an
+ * inspection cycle runs on the clock — mint scan markers light up on the
+ * hardware and the HUD callouts ring it in two alternating waves (the GLB
+ * is one fused mesh, so the act is a presentation, not a part explosion).
+ * Mount plays a converge-from-below entrance; unmount (switching product
+ * or leaving the page) disposes geometry, textures, material clones and
+ * the loader cache entry.
  */
 
-interface PartSpec {
+const MODEL_URL = "/models/tracker.glb";
+
+/** Normalized footprint: the GLB's largest bbox dimension maps to this many
+ *  world units — the framing contract every stage pose and callout radius
+ *  is authored against. */
+const TRACKER_SPAN = 2.5;
+
+/** Inspection cycle period (seconds): wave 0 presents, hands off to wave 1,
+ *  then a beat of rest before the cycle repeats. */
+const CYCLE = 11;
+
+// Start the fetch at module-eval time. Draco OFF (its decoder lives on a
+// CDN), meshopt ON (decoder bundled in three-stdlib).
+useGLTF.preload(MODEL_URL, false, true);
+
+interface SpotSpec {
+  /** PART_CALLOUTS id this spot narrates. */
   readonly id: string;
-  /** Resting (assembled) position. */
-  readonly rest: readonly [number, number, number];
-  /** Exploded offset, ADDED to rest during teardown. */
-  readonly apart: readonly [number, number, number];
-  /** Entrance offset, where the part flies in FROM on load. */
-  readonly from: readonly [number, number, number];
-  /** Stagger slot 0..1 within the teardown window. */
-  readonly stagger: number;
-  /** Anchor for the HUD callout (in part-local space), if any. */
-  readonly callout?: string;
+  /** Scan-marker dot, resting ON the hardware (normalized device space). */
+  readonly at: readonly [number, number, number];
+  /** HUD chip anchor. Anti-collision rules (the device yaws continuously,
+   *  so only VERTICAL separation is rotation-proof): per-wave y-tiers
+   *  ≥1.3 apart, radius ≤ ~2.4 so no chip swings past the viewport edge,
+   *  top cap ≤ 2.05 clear of the toggle corner on the model's side. */
+  readonly labelAt: readonly [number, number, number];
+  /** Reveal wave 0|1 — three chips per wave always fit the vertical safe
+   *  band; six at once cannot on short/wide viewports. */
+  readonly wave: 0 | 1;
 }
 
-const PARTS: readonly PartSpec[] = [
-  { id: "shell", rest: [0, 0, 0], apart: [0, -1.15, 0], from: [0, -6, 2], stagger: 0.0, callout: "shell" },
-  { id: "lid", rest: [0, 0.3, 0], apart: [0, 1.5, 0], from: [0, 7, -2], stagger: 0.12 },
-  { id: "pcb", rest: [0, 0.1, 0], apart: [0, 0.42, 0], from: [-7, 2, 0], stagger: 0.28, callout: "pcb" },
-  { id: "gps", rest: [-0.55, 0.22, 0.25], apart: [-0.95, 0.9, 0.7], from: [-5, 5, 4], stagger: 0.45, callout: "gps" },
-  { id: "canbus", rest: [0.55, 0.2, -0.22], apart: [1.5, 0.8, -0.7], from: [6, 4, -3], stagger: 0.58, callout: "canbus" },
-  { id: "battery", rest: [0.45, 0.17, 0.35], apart: [1.1, 0.35, 1.35], from: [5, -3, 5], stagger: 0.72, callout: "battery" },
-  { id: "antenna", rest: [-0.85, 0.34, -0.35], apart: [-1.4, 1.55, -0.9], from: [-4, 8, -5], stagger: 0.86, callout: "antenna" },
+/** Normalized device half-extents are ≈ [1.25, 0.57, 0.31] — `at` points sit
+ *  on the housing's features, `labelAt` chips ring the silhouette. */
+const SPOTS: readonly SpotSpec[] = [
+  { id: "gps", at: [-0.78, 0.34, 0.14], labelAt: [-1.5, 0.75, 0.3], wave: 0 },
+  { id: "pcb", at: [-0.3, 0.5, -0.05], labelAt: [-0.5, 2.05, -0.2], wave: 0 },
+  { id: "shell", at: [0.1, -0.45, 0.26], labelAt: [0.1, -1.45, 0.4], wave: 0 },
+  { id: "canbus", at: [0.95, 0.05, -0.1], labelAt: [1.7, 0.55, -0.2], wave: 1 },
+  { id: "battery", at: [0.6, -0.3, 0.18], labelAt: [1.2, -0.8, 0.5], wave: 1 },
+  { id: "antenna", at: [0.42, 0.52, -0.12], labelAt: [0.8, 1.9, -0.3], wave: 1 },
 ];
 
-/** Procedural PCB texture: dark board + emerald traces. Drawn once. */
-function makePcbTexture(): THREE.CanvasTexture {
-  const c = document.createElement("canvas");
-  c.width = 512;
-  c.height = 320;
-  const g = c.getContext("2d");
-  if (g) {
-    g.fillStyle = "#07271c";
-    g.fillRect(0, 0, 512, 320);
-    g.strokeStyle = "rgba(63,217,139,0.8)";
-    g.lineWidth = 2;
-    let seed = 7;
-    const rnd = (): number => {
-      seed = (seed * 16807) % 2147483647;
-      return seed / 2147483647;
-    };
-    for (let i = 0; i < 46; i += 1) {
-      let x = rnd() * 512;
-      let y = rnd() * 320;
-      g.beginPath();
-      g.moveTo(x, y);
-      for (let s = 0; s < 4; s += 1) {
-        // Manhattan traces: alternate horizontal/vertical runs.
-        if (s % 2 === 0) x = clamp01(rnd()) * 512;
-        else y = clamp01(rnd()) * 320;
-        g.lineTo(x, y);
-      }
-      g.stroke();
-      g.fillStyle = "rgba(63,217,139,0.95)";
-      g.beginPath();
-      g.arc(x, y, 3.2, 0, Math.PI * 2);
-      g.fill();
-    }
-  }
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  return tex;
+const SPOT_WAVE = new Map<string, 0 | 1>(SPOTS.map((s) => [s.id, s.wave]));
+
+/** Suspense shell: the GLB decodes off the critical path — the stage's
+ *  lights and the page DOM never wait on it. */
+export function Tracker(): JSX.Element {
+  return (
+    <Suspense fallback={null}>
+      <TrackerModel />
+    </Suspense>
+  );
 }
 
-const V = new THREE.Vector3();
-
-export function Tracker(): JSX.Element {
+function TrackerModel(): JSX.Element {
   const group = useRef<THREE.Group>(null);
-  const partRefs = useRef<Array<THREE.Group | null>>([]);
+  const dotRefs = useRef<Array<THREE.Mesh | null>>([]);
   const labelRefs = useRef<Array<HTMLDivElement | null>>([]);
-  const entrance = useRef(scrollState.reduced ? 1 : 0);
-  const pcbTexture = useMemo(makePcbTexture, []);
+  const entrance = useRef(motionState.reduced ? 1 : 0);
+  // Callout <Html> portals recompute a screen-space transform EVERY frame
+  // while mounted — they mount only once the entrance has settled (and
+  // never under reduced motion; the DOM spec table carries the content).
+  const [calloutsLive, setCalloutsLive] = useState(false);
+  const calloutsLiveRef = useRef(false);
   const mode = useTheme();
   const locale = useLocale();
   const isMobile = useIsMobile();
+  const tier = useViewportTier();
 
-  useEffect(() => {
-    return () => {
-      pcbTexture.dispose();
-    };
-  }, [pcbTexture]);
+  const gltf = useGLTF(MODEL_URL, false, true);
 
-  /* The device keeps its navy-metal identity in both themes, but daylight
-     lifts the alloy a notch and polishes it (lower roughness → crisp
-     speculars under the white key light) so it reads as a studio product
-     shot instead of a silhouette; emissives calm down where no bloom
-     backs them. All values come from the SCENE palette. */
-  const mats = useMemo(() => {
-    const P = SCENE[mode];
+  // ── Auto-centering + scale normalization (Box3 on mount) ──────────────
+  const norm = useMemo(() => {
+    const box = new THREE.Box3().setFromObject(gltf.scene);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const scale = TRACKER_SPAN / Math.max(size.x, size.y, size.z, 1e-4);
     return {
-      body: new THREE.MeshStandardMaterial({
-        color: P.bodyColor,
-        metalness: P.bodyMetalness,
-        roughness: P.bodyRoughness,
-      }),
-      dark: new THREE.MeshStandardMaterial({ color: P.darkPartColor, metalness: 0.7, roughness: 0.45 }),
-      emerald: new THREE.MeshStandardMaterial({
-        color: "#0c3f27",
-        emissive: "#3fd98b",
-        emissiveIntensity: P.emissiveEmerald,
-        roughness: 0.4,
-      }),
-      ice: new THREE.MeshStandardMaterial({
-        color: "#0a2c3d",
-        emissive: "#4fc3e8",
-        emissiveIntensity: P.emissiveIce,
-        roughness: 0.4,
-      }),
-      pcb: new THREE.MeshStandardMaterial({
-        map: pcbTexture,
-        emissiveMap: pcbTexture,
-        emissive: "#2aa368",
-        emissiveIntensity: P.emissivePcb,
-        color: P.pcbBoardColor,
-        roughness: 0.6,
-      }),
-      gold: new THREE.MeshStandardMaterial({ color: "#8a6d2f", metalness: 0.95, roughness: 0.3 }),
+      scale,
+      offset: [-center.x, -center.y, -center.z] as const,
     };
-  }, [pcbTexture, mode]);
+  }, [gltf.scene]);
+
+  // Every mesh casts onto the daylight shadow catcher AND self-receives the
+  // key light (ribbed housing shading) — normalBias at the light kills acne.
+  useEffect(() => {
+    gltf.scene.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (mesh.isMesh === true) {
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
+  }, [gltf.scene]);
+
+  /* Material harmony: keep the authored PBR set (albedo carries the ports,
+     screws and connector detail; the normal map the bevels; the MR map the
+     metal/plastic split) and re-grade it per theme via a cloned material —
+     daylight runs the texture untouched (it IS the charcoal identity), the
+     night room pulls it cool toward the navy alloy. Clones per theme, the
+     loader's originals kept pristine as clone sources. */
+  const originals = useMemo(() => {
+    const map = new Map<THREE.Mesh, THREE.Material>();
+    gltf.scene.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (mesh.isMesh === true && !Array.isArray(mesh.material)) map.set(mesh, mesh.material);
+    });
+    return map;
+  }, [gltf.scene]);
+
+  const themed = useMemo(() => {
+    const P = SCENE[mode];
+    const clones = new Map<THREE.Material, THREE.Material>();
+    originals.forEach((source) => {
+      if (clones.has(source)) return;
+      const clone = source.clone();
+      if (clone instanceof THREE.MeshStandardMaterial) clone.color.set(P.deviceTint);
+      clones.set(source, clone);
+    });
+    return clones;
+  }, [originals, mode]);
 
   useEffect(() => {
+    originals.forEach((source, mesh) => {
+      const clone = themed.get(source);
+      if (clone !== undefined) mesh.material = clone;
+    });
     return () => {
-      Object.values(mats).forEach((m) => {
-        m.dispose();
+      themed.forEach((clone) => {
+        clone.dispose();
       });
     };
-  }, [mats]);
+  }, [originals, themed]);
 
-  // Every part (incl. RoundedBox internals) casts onto the daylight shadow
-  // catcher — exploded components each throw their own grounded shadow.
-  useEffect(() => {
-    group.current?.traverse((obj) => {
-      if ((obj as THREE.Mesh).isMesh === true) (obj as THREE.Mesh).castShadow = true;
+  /* Scan markers: the platform's mint LED voice, pulsing on the hardware's
+     features while their callout wave is live. */
+  const dotGeometry = useMemo(() => new THREE.SphereGeometry(0.05, 12, 12), []);
+  const dotMaterial = useMemo(() => {
+    const P = SCENE[mode];
+    return new THREE.MeshStandardMaterial({
+      color: P.ledBase,
+      emissive: P.ledEmissive,
+      emissiveIntensity: P.emissiveEmerald,
+      roughness: 0.4,
     });
-  }, []);
+  }, [mode]);
+  useEffect(() => {
+    return () => {
+      dotMaterial.dispose();
+    };
+  }, [dotMaterial]);
 
-  const bodyMat = mats.body;
-  const darkMat = mats.dark;
-  const emeraldGlow = mats.emerald;
-  const iceGlow = mats.ice;
-  const pcbMat = mats.pcb;
-  const goldMat = mats.gold;
+  // ── Unmount teardown: everything the GLB brought in goes back out ─────
+  // Geometries + source materials + their textures, then the drei/useLoader
+  // cache entry, so the next mount (product switch back, or a route return)
+  // reloads from a clean slate instead of touching disposed GPU resources.
+  useEffect(() => {
+    const scene = gltf.scene;
+    const materials = gltf.materials;
+    return () => {
+      scene.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        if (mesh.isMesh === true) mesh.geometry.dispose();
+      });
+      Object.values(materials).forEach((material) => {
+        const std = material as THREE.MeshStandardMaterial;
+        std.map?.dispose();
+        std.normalMap?.dispose();
+        std.metalnessMap?.dispose();
+        std.roughnessMap?.dispose();
+        std.aoMap?.dispose();
+        std.emissiveMap?.dispose();
+        material.dispose();
+      });
+      useGLTF.clear(MODEL_URL);
+    };
+  }, [gltf.scene, gltf.materials]);
+
+  useEffect(() => {
+    return () => {
+      dotGeometry.dispose();
+    };
+  }, [dotGeometry]);
 
   useFrame((state, dt) => {
-    const p = scrollState.current;
     const t = state.clock.elapsedTime;
+    const reduced = motionState.reduced;
 
-    // Entrance plays once on load (skipped under reduced motion).
     entrance.current = Math.min(1, entrance.current + dt * 0.55);
     const inE = 1 - Math.pow(1 - entrance.current, 3);
 
-    // Re-assemble quickly as the collar phase begins, then shrink + rise to
-    // the hub pose DURING the collar showcase so the stage belongs to the
-    // second asset; by the time the map rises the device is already parked
-    // as the network hub.
-    const explode = phase(p, PHASES.heroEnd, PHASES.teardownEnd) * (1 - phase(p, PHASES.teardownEnd + 0.01, PHASES.teardownEnd + 0.05));
-    const hub = phase(p, PHASES.teardownEnd, lerp(PHASES.teardownEnd, PHASES.collarEnd, 0.45));
+    const live = !reduced && entrance.current >= 1;
+    if (live !== calloutsLiveRef.current) {
+      calloutsLiveRef.current = live;
+      setCalloutsLive(live);
+    }
+
+    // Inspection cycle: two chip waves per period, with rest between
+    // cycles. Everything derives from the same clock, so the lift, the
+    // dots and the chips always agree.
+    const cyc = reduced ? 0 : ((t % CYCLE) + CYCLE) % CYCLE / CYCLE;
+    const wave0 = live ? phase(cyc, 0.08, 0.16) * (1 - phase(cyc, 0.4, 0.48)) : 0;
+    const wave1 = live ? phase(cyc, 0.52, 0.6) * (1 - phase(cyc, 0.86, 0.94)) : 0;
+    const inspect = Math.min(1, wave0 + wave1);
+
     const g = group.current;
     if (g !== null) {
-      const scale = lerp(1, 0.34, hub);
-      g.scale.setScalar(scale * lerp(0.6, 1, inE));
-      g.position.set(0, lerp(0.15, 2.05, hub) + Math.sin(t * 0.9) * 0.05, 0);
-      g.rotation.y = t * 0.14 + p * Math.PI * 1.2;
-      g.rotation.x = Math.sin(t * 0.5) * 0.04 + lerp(0, 0.5, hub);
+      g.visible = true;
+      g.scale.setScalar(Math.max(0.001, lerp(0.6, 1, inE) * (1 + 0.07 * inspect)));
+      const float = reduced ? 0 : Math.sin(t * 0.9) * 0.05;
+      g.position.set(0, 0.15 + 0.18 * inspect + float - (1 - inE) * 1.6, 0);
+      // Continuous presentation turn + entrance settle; a touch of extra
+      // pitch while a wave is live tips the top toward the camera.
+      g.rotation.y = (reduced ? t * 0.1 : t * 0.16) + (1 - inE) * 0.9;
+      g.rotation.x = reduced ? 0 : Math.sin(t * 0.5) * 0.04 + inspect * 0.14;
     }
 
-    // Mobile: the narrow frame can't afford the full lateral blast radius —
-    // pull the exploded offsets in so every part (and its callout chip)
-    // stays inside the phone viewport.
-    const spread = viewport.isMobile ? 0.72 : 1;
-    PARTS.forEach((part, i) => {
-      const node = partRefs.current[i];
-      if (node === undefined || node === null) return;
-      // Per-part stagger inside the teardown window.
-      const e = clamp01((explode - part.stagger * 0.35) / 0.65);
-      const eased = e * e * (3 - 2 * e) * spread;
-      const back = 1 - inE;
-      node.position.set(
-        part.rest[0] + part.apart[0] * eased + part.from[0] * back,
-        part.rest[1] + part.apart[1] * eased + part.from[1] * back,
-        part.rest[2] + part.apart[2] * eased + part.from[2] * back,
-      );
-      node.rotation.z = eased * 0.25 * (i % 2 === 0 ? 1 : -1);
+    const waveOpacity: readonly [number, number] = [wave0, wave1];
+
+    SPOTS.forEach((spot, i) => {
+      const dot = dotRefs.current[i];
+      if (dot === undefined || dot === null) return;
+      const o = waveOpacity[spot.wave] ?? 0;
+      dot.visible = o > 0.02;
+      // Breathing pulse, de-synced per dot so the ring reads as live
+      // instruments rather than a blinking array.
+      dot.scale.setScalar(Math.max(0.001, o * (1 + Math.sin(t * 3.4 + i * 1.7) * 0.12)));
     });
 
-    // Callout opacity rides the explode factor (direct style writes, no
-    // React) — and dies FAST when the collar act begins, so the stage
-    // handoff isn't cluttered with stale hardware labels.
-    const labelOpacity = clamp01(explode * 1.6 - 0.25) * (1 - phase(p, PHASES.teardownEnd, PHASES.teardownEnd + 0.03));
-    labelRefs.current.forEach((el) => {
+    labelRefs.current.forEach((el, idx) => {
       if (el !== null) {
-        el.style.opacity = String(labelOpacity);
-        el.style.transform = `translateY(${String((1 - labelOpacity) * 8)}px)`;
+        const id = PART_CALLOUTS[idx]?.id;
+        const o = waveOpacity[(id !== undefined ? SPOT_WAVE.get(id) : 0) ?? 0] ?? 0;
+        el.style.opacity = String(o);
+        el.style.transform = `translateY(${String((1 - o) * 8)}px)`;
       }
     });
-
-    // Reduced motion: freeze assembled, no explode (scroll still moves camera
-    // minimally via the rig's own reduced branch).
-    if (scrollState.reduced && g !== null) {
-      g.rotation.y = t * 0.1;
-    }
-    V.set(0, 0, 0); // keep the shared vector warm; avoids GC churn elsewhere
   });
 
-  const calloutFor = (id: string | undefined): JSX.Element | null => {
-    if (id === undefined) return null;
-    const index = PART_CALLOUTS.findIndex((c) => c.id === id);
+  const calloutFor = (spot: SpotSpec): JSX.Element | null => {
+    const index = PART_CALLOUTS.findIndex((c) => c.id === spot.id);
     const callout = PART_CALLOUTS[index];
     if (callout === undefined) return null;
-    // Mobile chips render smaller (and compact via CSS) so they ring the
-    // hardware without covering it.
+    // Narrow frames pull the chip ring in — every chip must stay inside its
+    // zone (phone stack / tablet half); mobile also renders compact.
+    const squeeze = isMobile ? 0.75 : tier === "tablet" ? 0.86 : 1;
     return (
-      <Html center distanceFactor={isMobile ? 4.5 : 5.5} zIndexRange={[20, 11]}>
+      <Html
+        center
+        distanceFactor={isMobile ? 4.5 : 5.5}
+        position={[spot.labelAt[0] * squeeze, spot.labelAt[1] * squeeze, spot.labelAt[2] * squeeze]}
+        zIndexRange={[20, 11]}
+      >
         <div
           className="callout"
           ref={(el) => {
@@ -253,80 +294,26 @@ export function Tracker(): JSX.Element {
 
   return (
     <group ref={group}>
-      {PARTS.map((part, i) => (
-        <group
-          key={part.id}
-          ref={(el) => {
-            partRefs.current[i] = el;
-          }}
-        >
-          {part.id === "shell" && (
-            <group>
-              <RoundedBox args={[2.3, 0.34, 1.5]} radius={0.09} smoothness={4} material={bodyMat} />
-              {/* side ports */}
-              <mesh position={[1.17, 0, 0.3]} material={darkMat}>
-                <boxGeometry args={[0.08, 0.14, 0.34]} />
-              </mesh>
-              <mesh position={[1.17, 0, -0.25]} material={iceGlow}>
-                <boxGeometry args={[0.06, 0.1, 0.22]} />
-              </mesh>
-            </group>
-          )}
-          {part.id === "lid" && (
-            <group>
-              <RoundedBox args={[2.3, 0.18, 1.5]} radius={0.08} smoothness={4} material={bodyMat} />
-              {/* brand LED ring + engraved vents */}
-              <mesh position={[0.62, 0.1, 0.38]} rotation={[-Math.PI / 2, 0, 0]} material={emeraldGlow}>
-                <torusGeometry args={[0.17, 0.028, 12, 40]} />
-              </mesh>
-              {[-0.5, -0.32, -0.14].map((x) => (
-                <mesh key={x} position={[x, 0.095, -0.3]} material={darkMat}>
-                  <boxGeometry args={[0.07, 0.02, 0.6]} />
-                </mesh>
-              ))}
-            </group>
-          )}
-          {part.id === "pcb" && (
-            <mesh material={pcbMat}>
-              <boxGeometry args={[2.05, 0.06, 1.28]} />
-            </mesh>
-          )}
-          {part.id === "gps" && (
-            <group>
-              <mesh material={goldMat}>
-                <boxGeometry args={[0.46, 0.1, 0.46]} />
-              </mesh>
-              <mesh position={[0, 0.08, 0]} material={iceGlow}>
-                <boxGeometry args={[0.3, 0.06, 0.3]} />
-              </mesh>
-            </group>
-          )}
-          {part.id === "canbus" && (
-            <group>
-              <mesh material={darkMat}>
-                <boxGeometry args={[0.62, 0.16, 0.4]} />
-              </mesh>
-              <mesh position={[0, 0.1, 0]} material={emeraldGlow}>
-                <boxGeometry args={[0.4, 0.05, 0.2]} />
-              </mesh>
-            </group>
-          )}
-          {part.id === "battery" && (
-            <mesh material={darkMat}>
-              <cylinderGeometry args={[0.14, 0.14, 0.52, 20]} />
-            </mesh>
-          )}
-          {part.id === "antenna" && (
-            <group>
-              <mesh material={bodyMat}>
-                <cylinderGeometry args={[0.05, 0.08, 0.5, 14]} />
-              </mesh>
-              <mesh position={[0, 0.34, 0]} material={emeraldGlow}>
-                <sphereGeometry args={[0.06, 14, 14]} />
-              </mesh>
-            </group>
-          )}
-          {calloutFor(part.callout)}
+      {/* Normalization wrapper: uniform fit scale, then the pivot shift
+          that parks the bbox center exactly on the group origin. */}
+      <group scale={norm.scale}>
+        <group position={norm.offset}>
+          <primitive object={gltf.scene} />
+        </group>
+      </group>
+
+      {SPOTS.map((spot, i) => (
+        <group key={spot.id}>
+          <mesh
+            ref={(el) => {
+              dotRefs.current[i] = el;
+            }}
+            position={spot.at}
+            visible={false}
+            geometry={dotGeometry}
+            material={dotMaterial}
+          />
+          {calloutsLive && calloutFor(spot)}
         </group>
       ))}
     </group>

@@ -1,4 +1,6 @@
 import type { Bi } from "./locale";
+import type { ProductId } from "./productState";
+import type { Route } from "./router";
 
 /**
  * Ground-truth content for the NNS 3D platform — fully bilingual.
@@ -194,7 +196,7 @@ export const DOMAINS: readonly Domain[] = [
     name: { ar: "النقل الذكي", en: "Smart Mobility" },
     tag: "SMART MOBILITY",
     count: 12,
-    image: "/images/highway-pins.jpg",
+    image: "/images/highway-pins.webp",
     solutions: [
       { ar: "تتبع الحافلات و IVMS", en: "Bus tracking & IVMS" },
       { ar: "مراقبة سلسلة التبريد", en: "Cold-chain monitoring" },
@@ -205,7 +207,7 @@ export const DOMAINS: readonly Domain[] = [
     name: { ar: "القطاع الصناعي 4.0", en: "Industry 4.0" },
     tag: "INDUSTRY 4.0",
     count: 4,
-    image: "/images/industry-robot.jpg",
+    image: "/images/industry-robot.webp",
     solutions: [
       { ar: "منع اصطدام الرافعات الشوكية", en: "Forklift collision prevention" },
       { ar: "إدارة المستودعات وساحات التشغيل", en: "Warehouse & yard management" },
@@ -216,7 +218,7 @@ export const DOMAINS: readonly Domain[] = [
     name: { ar: "المدينة الذكية", en: "Smart City" },
     tag: "SMART CITY",
     count: 8,
-    image: "/images/smart-city-night.jpg",
+    image: "/images/smart-city-night.webp",
     solutions: [
       { ar: "إضاءة الشارع الذكية", en: "Smart street lighting" },
       { ar: "الموقف الذكي بالذكاء الاصطناعي", en: "AI smart parking" },
@@ -227,7 +229,7 @@ export const DOMAINS: readonly Domain[] = [
     name: { ar: "تقنيات البناء والتشييد", en: "Construction Tech" },
     tag: "CONSTRUCTION TECH",
     count: 6,
-    image: "/images/construction-site.jpg",
+    image: "/images/construction-site.webp",
     solutions: [
       { ar: "الخوذة الذكية والعمال المتصلون", en: "Smart helmet & connected workers" },
       { ar: "سلامة الموقع بالذكاء الاصطناعي", en: "AI site-safety monitoring" },
@@ -297,7 +299,10 @@ export const COPY = {
     kicker: "07 // SOLUTIONS",
     h2: { ar: "ثلاثون حلًا في أربعة مجالات", en: "Thirty solutions across four domains" },
   },
+  /** Scroll invitation under the Home hero (the depth film's cue). */
   cue: { ar: "مرّر للاستكشاف", en: "Scroll to explore" },
+  /** Shown if the WebGL context is lost and the browser can't restore it. */
+  glLost: { ar: "توقّف العرض ثلاثي الأبعاد — اضغط لإعادة التحميل", en: "3D view paused — tap to reload" },
 } as const;
 
 /** Smart security collar — the Wild Animal Tracking field unit. Modeled on
@@ -380,35 +385,396 @@ export const CITY_FEATURES: readonly Bi[] = [
   { ar: "القياس الذكي", en: "Smart metering" },
 ];
 
-/** Scroll phase boundaries (fractions of total scroll). One source of truth
- *  shared by the camera rig, the scene and the DOM sections.
- *
- *  MUTABLE on purpose: `syncPhases()` (scroll.ts) re-derives each boundary
- *  from the actual section offsets after layout, fonts and resizes, so the
- *  3D beats stay locked to the copy that narrates them at any viewport
- *  height. The numbers below are only the pre-layout fallback. */
-export const PHASES: {
-  heroEnd: number;
-  teardownEnd: number;
-  collarEnd: number;
-  cityEnd: number;
-  networkEnd: number;
-  aiEnd: number;
-} = {
-  heroEnd: 0.15,
-  teardownEnd: 0.32,
-  collarEnd: 0.49,
-  cityEnd: 0.65,
-  networkEnd: 0.82,
-  aiEnd: 0.97,
+/* ════════════════════════════════════════════════════════════════════════
+   Multi-page app content — navigation, the three sub-pages, and the forms.
+   Same ground rules as everything above: bilingual throughout, specs and
+   figures only from the company profile; the offers below package REAL
+   solutions from the profile's indexes and deliberately carry no invented
+   prices (quotes go through the request form).
+   ════════════════════════════════════════════════════════════════════════ */
+
+export interface NavItem {
+  readonly route: Route;
+  readonly label: Bi;
+  /** Mono index chip (instrument text). */
+  readonly tag: string;
+}
+
+export const NAV: readonly NavItem[] = [
+  { route: "home", label: { ar: "الرئيسية", en: "Home" }, tag: "01" },
+  { route: "products", label: { ar: "المنتجات", en: "Products" }, tag: "02" },
+  { route: "support", label: { ar: "الدعم الفني", en: "Support" }, tag: "03" },
+  { route: "requests", label: { ar: "الطلبات والعروض", en: "Requests & About" }, tag: "04" },
+];
+
+export const PAGE_TITLES: Record<Route, Bi> = {
+  home: { ar: "النخلة الأمنية — الرئيسية", en: "ALNAKHLAH SECURITY — Home" },
+  products: { ar: "النخلة الأمنية — المنتجات", en: "ALNAKHLAH SECURITY — Products" },
+  support: { ar: "النخلة الأمنية — الدعم الفني", en: "ALNAKHLAH SECURITY — Support" },
+  requests: {
+    ar: "النخلة الأمنية — الطلبات والعروض ومن نحن",
+    en: "ALNAKHLAH SECURITY — Requests, Offers & About",
+  },
 };
 
-export const PHASE_LABELS: ReadonlyArray<{ readonly code: string; readonly name: Bi }> = [
-  { code: "01 // DEVICE", name: { ar: "الجهاز", en: "Device" } },
-  { code: "02 // HARDWARE", name: { ar: "العتاد", en: "Hardware" } },
-  { code: "03 // SMART COLLAR", name: { ar: "الطوق الذكي", en: "Smart Collar" } },
-  { code: "04 // SMART CITY", name: { ar: "المدينة الذكية", en: "Smart City" } },
-  { code: "05 // NETWORK", name: { ar: "الشبكة", en: "Network" } },
-  { code: "06 // AI VISION", name: { ar: "الذكاء", en: "AI Vision" } },
-  { code: "07 // SOLUTIONS", name: { ar: "الحلول", en: "Solutions" } },
+/** The Home map block narrates the Kingdom network (same profile page the
+ *  old network act used). */
+export const HOME_MAP = {
+  kicker: "02 // KINGDOM NETWORK",
+  h2: { ar: "تغطية لكافة مناطق المملكة", en: "Coverage across the whole Kingdom" },
+  lead: {
+    ar: "خمس مدن تشغيل، ومركز قيادة واحد في الرياض — بنية تتبع واحدة من الخليج إلى البحر الأحمر.",
+    en: "Five operating cities and one command center in Riyadh — a single tracking fabric from the Gulf to the Red Sea.",
+  },
+} as const;
+
+/* ── Products page ──────────────────────────────────────────────────── */
+
+/** FMC130 — the compact vehicle terminal. Its GLB ships four REAL part
+ *  nodes (front/back housings, side port, base rail), so the products
+ *  page runs a true scroll-driven exploded view on it. Part descriptions
+ *  state what the 3D parts physically are; every spec microline is a
+ *  [TODO] placeholder until the content owner supplies profile-sourced
+ *  figures. */
+export const FMC130_CALLOUTS: readonly PartCallout[] = [
+  {
+    id: "f130-front",
+    tag: "FRONT HOUSING",
+    desc: { ar: "الغطاء الأمامي — يحمل لوحة بيانات الجهاز", en: "Front housing — carries the device label plate" },
+    spec: "[TODO] SPEC",
+  },
+  {
+    id: "f130-back",
+    tag: "BACK HOUSING",
+    desc: { ar: "الغطاء الخلفي محكم الإغلاق", en: "Sealed back housing" },
+    spec: "[TODO] SPEC",
+  },
+  {
+    id: "f130-port",
+    tag: "SIDE PORT",
+    desc: { ar: "منفذ جانبي للتوصيل والصيانة", en: "Side connector & service port" },
+    spec: "[TODO] SPEC",
+  },
+  {
+    id: "f130-rail",
+    tag: "BASE RAIL",
+    desc: { ar: "قاعدة التثبيت السفلية", en: "Bottom mounting rail" },
+    spec: "[TODO] SPEC",
+  },
 ];
+
+/** FMC920 — the plug-and-track unit. Its GLB splits into the sealed unit,
+ *  the vehicle power harness coiled behind it and the quick connector
+ *  pieces — the exploded view reads as the unit unplugging from its
+ *  install harness. Same [TODO] rule as above. */
+export const FMC920_CALLOUTS: readonly PartCallout[] = [
+  {
+    id: "f920-unit",
+    tag: "TRACKING UNIT",
+    desc: { ar: "وحدة التتبع المدمجة", en: "The sealed tracking unit" },
+    spec: "[TODO] SPEC",
+  },
+  {
+    id: "f920-harness",
+    tag: "POWER HARNESS",
+    desc: { ar: "ضفيرة التوصيل بطاقة المركبة", en: "Vehicle power wiring harness" },
+    spec: "[TODO] SPEC",
+  },
+  {
+    id: "f920-plug",
+    tag: "QUICK CONNECTOR",
+    desc: { ar: "موصل سريع الفصل للتركيب", en: "Quick-release install connector" },
+    spec: "[TODO] SPEC",
+  },
+];
+
+export interface Product {
+  readonly id: ProductId;
+  readonly name: Bi;
+  /** Mono spec strip under the name. */
+  readonly tag: string;
+  readonly kicker: string;
+  readonly blurb: Bi;
+  /** Spec table rows (the same hardware families the 3D callouts cite). */
+  readonly callouts: readonly PartCallout[];
+  /** Optional capability chips. */
+  readonly chips?: readonly Bi[];
+}
+
+export const PRODUCTS: readonly Product[] = [
+  {
+    id: "tracker",
+    name: { ar: "جهاز التتبع المتقدم", en: "Advanced Tracking Unit" },
+    tag: "AVL · FMS · SATELLITE",
+    kicker: "01 // TRACKING HARDWARE",
+    blurb: COPY.teardown.lead,
+    callouts: PART_CALLOUTS,
+  },
+  {
+    id: "collar",
+    name: { ar: "طوق التتبع الميداني", en: "Field Tracking Collar" },
+    tag: "GPS · SOLAR · SATELLITE",
+    kicker: "02 // FIELD UNIT",
+    blurb: COPY.collar.lead,
+    callouts: COLLAR_CALLOUTS,
+    chips: COLLAR_SENSORS,
+  },
+  {
+    id: "city",
+    name: { ar: "منظومة المدينة الذكية", en: "Smart City Platform" },
+    tag: "IOT · CITY OPERATIONS",
+    kicker: "03 // SMART CITY",
+    blurb: COPY.city.lead,
+    callouts: CITY_CALLOUTS,
+    chips: CITY_FEATURES,
+  },
+  {
+    id: "fmc130",
+    name: { ar: "جهاز FMC130", en: "FMC130 Terminal" },
+    tag: "[TODO] TAG LINE",
+    kicker: "04 // VEHICLE TERMINAL",
+    blurb: {
+      ar: "[TODO] وصف تعريفي قصير لجهاز FMC130 — مرّر للأسفل لتفكيك الجهاز قطعةً قطعة.",
+      en: "[TODO] Short introduction for the FMC130 terminal — scroll to take the unit apart piece by piece.",
+    },
+    callouts: FMC130_CALLOUTS,
+  },
+  {
+    id: "fmc920",
+    name: { ar: "جهاز FMC920", en: "FMC920 Tracker" },
+    tag: "[TODO] TAG LINE",
+    kicker: "05 // COMPACT TRACKER",
+    blurb: {
+      ar: "[TODO] وصف تعريفي قصير لجهاز FMC920 — مرّر للأسفل لفصل الوحدة عن ضفيرة التوصيل.",
+      en: "[TODO] Short introduction for the FMC920 tracker — scroll to unplug the unit from its install harness.",
+    },
+    callouts: FMC920_CALLOUTS,
+  },
+];
+
+export const PRODUCTS_PAGE = {
+  kicker: "02 // PRODUCT LINEUP",
+  h2: { ar: "عتاد المنصة، قطعةً قطعة", en: "The platform's hardware, piece by piece" },
+  lead: {
+    ar: "خمسة منتجات تغطي المركبة والميدان والمدينة — اختر منتجًا لاستكشافه ثلاثي الأبعاد.",
+    en: "Five products covering vehicle, field and city — pick a product to inspect it in 3D.",
+  },
+  switchLabel: { ar: "اختيار المنتج", en: "Select product" },
+  specsTitle: { ar: "المواصفات", en: "Specifications" },
+  /** Scroll invitation + a11y name for the FMC exploded-view track. */
+  explodeCue: { ar: "مرّر لتفكيك الجهاز — والعودة تعيد تجميعه", en: "Scroll to take it apart — scroll back to reassemble" },
+  viewerLabel: { ar: "عرض ثلاثي الأبعاد تفاعلي يتفكك مع التمرير", en: "Interactive 3D exploded view driven by scroll" },
+} as const;
+
+/* ── Technical Support page ─────────────────────────────────────────── */
+
+export const SUPPORT_PAGE = {
+  kicker: "03 // TECHNICAL SUPPORT",
+  h2: { ar: "الدعم الفني", en: "Technical Support" },
+  lead: {
+    ar: "فريق متخصص يرافقك من التركيب إلى التشغيل — قنوات مباشرة، وأسئلة شائعة، ونموذج تذكرة يصل إلى فريق العمليات.",
+    en: "A specialist team from installation to operations — direct channels, FAQs, and a ticket form that reaches our operations desk.",
+  },
+  channelsTitle: { ar: "قنوات مباشرة", en: "Direct channels" },
+  faqTitle: { ar: "أسئلة شائعة", en: "Frequently asked questions" },
+  formTitle: { ar: "فتح تذكرة دعم", en: "Open a support ticket" },
+  formLead: {
+    ar: "عبّئ البيانات التالية وسيتولى الفريق المختص تذكرتك بحسب أولويتها.",
+    en: "Fill in the details below and the right team will pick up your ticket by priority.",
+  },
+} as const;
+
+/** FAQs — every answer restates profile facts (coverage, failover, IVMS,
+ *  licensing, anti-harsh build, team). */
+export const FAQS: ReadonlyArray<{ readonly q: Bi; readonly a: Bi }> = [
+  {
+    q: { ar: "ما نطاق التغطية داخل المملكة؟", en: "What is the coverage across Saudi Arabia?" },
+    a: {
+      ar: "تغطية لكافة مناطق المملكة عبر خمس مدن تشغيل — الرياض وجدة والدمام وأبها وتبوك — ومركز قيادة واحد في الرياض.",
+      en: "Coverage across all regions through five operating cities — Riyadh, Jeddah, Dammam, Abha and Tabuk — with one command center in Riyadh.",
+    },
+  },
+  {
+    q: { ar: "ماذا يحدث خارج التغطية الخلوية؟", en: "What happens beyond cellular coverage?" },
+    a: {
+      ar: "أجهزتنا تدعم التحويل التلقائي إلى الاتصال عبر الأقمار الصناعية، مع خيارات الطاقة الشمسية لوحدات الميدان — فلا ينقطع التتبع.",
+      en: "Our units fail over automatically to satellite connectivity, with solar options for field units — tracking never drops.",
+    },
+  },
+  {
+    q: { ar: "ما الذي ترصده المنصة من مخالفات وتنبيهات؟", en: "What violations and alarms does the platform detect?" },
+    a: {
+      ar: "١٥ نوع مخالفة وأكثر من ٢٥ تنبيهًا — من السرعة والحرارة إلى أحداث رؤية السائق DMS/ADAS مثل الإجهاد ومغادرة المسار.",
+      en: "15 violation types and 25+ alarms — from speed and temperature to DMS/ADAS vision events like fatigue and lane departure.",
+    },
+  },
+  {
+    q: { ar: "هل تتحمل الأجهزة البيئات القاسية؟", en: "Do the devices survive harsh environments?" },
+    a: {
+      ar: "نعم — تصميم مقاوم للحرارة والغبار والرطوبة والاهتزاز، مثبت ميدانيًا في مواقع الإنشاء والصحراء والمناطق الصناعية.",
+      en: "Yes — built against heat, dust, moisture and vibration, field-proven on construction, desert and industrial sites.",
+    },
+  },
+  {
+    q: { ar: "هل الشركة مرخصة؟", en: "Is the company licensed?" },
+    a: {
+      ar: "مرخصة من هيئة الاتصالات والفضاء والتقنية، ومن الهيئة العامة للنقل بترخيص فئة (ب) لخدمات التتبع AVL.",
+      en: "Licensed by the Communications, Space & Technology Commission, and by the Transport General Authority with an AVL class (B) license.",
+    },
+  },
+  {
+    q: { ar: "من يتولى التركيب والتفعيل؟", en: "Who handles installation and activation?" },
+    a: {
+      ar: "فريقنا — أكثر من ٢٠ موظفًا محترفًا يتولون التركيب والتفعيل وربط الأجهزة بالمنصة وتدريب فريقك عليها.",
+      en: "Our team — 20+ professional specialists handle installation, activation, platform onboarding and training.",
+    },
+  },
+];
+
+/* ── Shared form vocabulary ─────────────────────────────────────────── */
+
+export const FORM = {
+  name: { ar: "الاسم الكامل", en: "Full name" },
+  company: { ar: "الشركة / الجهة", en: "Company / organization" },
+  email: { ar: "البريد الإلكتروني", en: "Email" },
+  phone: { ar: "رقم الجوال (اختياري)", en: "Phone (optional)" },
+  product: { ar: "المنتج / الجهاز", en: "Product / device" },
+  category: { ar: "نوع المشكلة", en: "Issue category" },
+  priority: { ar: "الأولوية", en: "Priority" },
+  message: { ar: "وصف الحالة", en: "Describe the issue" },
+  messagePlaceholder: {
+    ar: "رقم الوحدة إن وُجد، ومتى بدأت المشكلة، وما الذي جربته…",
+    en: "Unit number if any, when it started, what you tried…",
+  },
+  submitTicket: { ar: "إرسال التذكرة", en: "Submit ticket" },
+  submitRequest: { ar: "إرسال الطلب", en: "Submit request" },
+  required: { ar: "هذا الحقل مطلوب", en: "This field is required" },
+  badEmail: { ar: "يرجى إدخال بريد إلكتروني صحيح", en: "Please enter a valid email" },
+  select: { ar: "اختر…", en: "Select…" },
+  otherProduct: { ar: "أخرى / غير مدرج", en: "Other / not listed" },
+  refLabel: "REF",
+  confirmTicketTitle: { ar: "تم تسجيل التذكرة", en: "Ticket recorded" },
+  confirmRequestTitle: { ar: "تم تسجيل الطلب", en: "Request recorded" },
+  confirmBody: {
+    ar: "احتفظ بالمرجع أدناه، ثم أكمل الإرسال عبر البريد ليصل مباشرة إلى الفريق المختص.",
+    en: "Keep the reference below, then finish by sending it via email so it lands with the right team.",
+  },
+  mailCta: { ar: "إرسال عبر البريد", en: "Send via email" },
+  resetTicket: { ar: "تذكرة جديدة", en: "New ticket" },
+  resetRequest: { ar: "طلب جديد", en: "New request" },
+} as const;
+
+export const TICKET_CATEGORIES: readonly Bi[] = [
+  { ar: "التركيب والتفعيل", en: "Installation & activation" },
+  { ar: "المنصة والتقارير", en: "Platform & reports" },
+  { ar: "الإشارة والتتبع", en: "Signal & tracking" },
+  { ar: "الفوترة والاشتراك", en: "Billing & subscription" },
+  { ar: "أخرى", en: "Other" },
+];
+
+export const TICKET_PRIORITIES: readonly Bi[] = [
+  { ar: "منخفضة", en: "Low" },
+  { ar: "عادية", en: "Normal" },
+  { ar: "عالية", en: "High" },
+  { ar: "حرجة", en: "Critical" },
+];
+
+/* ── Requests, Offers & About page ──────────────────────────────────── */
+
+export const ABOUT = {
+  kicker: "04 // ABOUT US",
+  h2: { ar: "من نحن", en: "About us" },
+  mission: {
+    ar: "النخلة الأهلية الأمنية شركة سعودية متخصصة في إدارة الأساطيل وتتبع المركبات والكاميرات الذكية وإنترنت الأشياء — نبني منظومات تتبع احترافية تمنح عملاءنا تحكمًا كاملًا في كل حركة، تماشيًا مع رؤية المملكة 2030.",
+    en: "ALNAKHLAH Security is a Saudi company specialized in fleet management, vehicle tracking, smart cameras and IoT — building professional tracking systems that give our clients command of every movement, in line with Saudi Vision 2030.",
+  },
+  body: {
+    ar: "من مركز القيادة في الرياض يدير فريقنا — أكثر من ٢٠ مختصًا — آلاف الأجهزة المتصلة عبر خمس مدن تشغيل، على عتاد مصمم للبيئات القاسية واتصال لا ينقطع حتى خارج التغطية الخلوية.",
+    en: "From the Riyadh command center our team of 20+ specialists operates thousands of connected devices across five cities, on hardware engineered for harsh environments with connectivity that holds beyond cellular coverage.",
+  },
+  capsTitle: { ar: "بالأرقام", en: "By the numbers" },
+  domainsTitle: { ar: "مجالات الحلول", en: "Solution domains" },
+} as const;
+
+export interface Offer {
+  readonly tag: string;
+  readonly name: Bi;
+  readonly desc: Bi;
+  readonly features: readonly Bi[];
+}
+
+export const OFFERS_PAGE = {
+  kicker: "05 // OFFERS",
+  h2: { ar: "العروض والباقات", en: "Offers & packages" },
+  lead: {
+    ar: "باقات مبنية من حلول المنصة الفعلية — الأسعار بحسب حجم الأسطول ومدة الاشتراك، واطلب عرضًا مخصصًا من النموذج أدناه.",
+    en: "Packages built from the platform's real solutions — pricing follows fleet size and term; request a tailored quote below.",
+  },
+  cta: { ar: "اطلب عرض سعر", en: "Request a quote" },
+} as const;
+
+export const OFFERS: readonly Offer[] = [
+  {
+    tag: "FLEET STARTER",
+    name: { ar: "الأسطول الناشئ", en: "Fleet Starter" },
+    desc: {
+      ar: "حتى ٢٥ مركبة — انطلاقة سريعة إلى التتبع الاحترافي.",
+      en: "Up to 25 vehicles — a fast start into professional tracking.",
+    },
+    features: [
+      { ar: "جهاز تتبع متقدم لكل مركبة", en: "Advanced tracker per vehicle" },
+      { ar: "منصة المراقبة والتقارير", en: "Monitoring & reports platform" },
+      { ar: "تنبيهات المخالفات لحظيًا", en: "Real-time violation alerts" },
+    ],
+  },
+  {
+    tag: "ENTERPRISE FLEET",
+    name: { ar: "أسطول المؤسسات", en: "Enterprise Fleet" },
+    desc: {
+      ar: "للأساطيل الكبيرة — رؤية كاملة وسلامة سائقين بالذكاء الاصطناعي.",
+      en: "For large fleets — full visibility and AI driver safety.",
+    },
+    features: [
+      { ar: "كاميرات IVMS بتقنيتي DMS و ADAS", en: "IVMS cameras with DMS & ADAS" },
+      { ar: "تحويل تلقائي للأقمار الصناعية خارج التغطية", en: "Satellite failover beyond coverage" },
+      { ar: "مراقبة سلسلة التبريد", en: "Cold-chain monitoring" },
+      { ar: "دعم مخصص", en: "Dedicated support" },
+    ],
+  },
+  {
+    tag: "SMART SITE & CITY",
+    name: { ar: "المواقع والمدن الذكية", en: "Smart Site & City" },
+    desc: {
+      ar: "إنترنت الأشياء للمنشآت والمدن — من الإنارة إلى العدادات.",
+      en: "IoT for facilities and cities — from lighting to metering.",
+    },
+    features: [
+      { ar: "إضاءة شوارع ومواقف ذكية", en: "Smart street lighting & parking" },
+      { ar: "قياس ذكي وإدارة مخلفات", en: "Smart metering & waste management" },
+      { ar: "الخوذة الذكية وسلامة المواقع", en: "Smart helmets & site safety" },
+    ],
+  },
+];
+
+export const REQUESTS_PAGE = {
+  kicker: "06 // SUBMIT A REQUEST",
+  h2: { ar: "تقديم الطلبات", en: "Submit a request" },
+  lead: {
+    ar: "عرض سعر، طلب كمية، أو مقترح شراكة — عبّئ النموذج وسيصلك رد الفريق التجاري.",
+    en: "A quote, a bulk order, or a partnership proposal — fill in the form and our commercial team will respond.",
+  },
+  typeLabel: { ar: "نوع الطلب", en: "Request type" },
+  types: [
+    { ar: "عرض سعر", en: "Quote" },
+    { ar: "طلب كمية / تجاري", en: "Bulk / commercial order" },
+    { ar: "شراكة", en: "Partnership" },
+  ] as readonly Bi[],
+  fleetLabel: { ar: "حجم الأسطول / الوحدات", en: "Fleet / unit count" },
+  fleetSizes: ["1–10", "11–50", "51–200", "200+"] as readonly string[],
+  domainLabel: { ar: "مجال الحل", en: "Solution domain" },
+  detailsLabel: { ar: "تفاصيل الطلب", en: "Request details" },
+  detailsPlaceholder: {
+    ar: "نوع المركبات أو المواقع، المدن، الجدول الزمني المتوقع…",
+    en: "Vehicle or site types, cities, expected timeline…",
+  },
+} as const;

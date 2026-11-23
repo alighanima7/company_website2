@@ -54,6 +54,9 @@ export function ThemeToggle(): JSX.Element {
       }, 280),
       window.setTimeout(() => {
         setVeil(null);
+        // The switch is over — drop the spent ids so the list doesn't grow
+        // by three per toggle for the life of the page.
+        timers.current.length = 0;
       }, 650),
     );
   };

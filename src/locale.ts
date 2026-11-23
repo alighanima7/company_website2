@@ -8,10 +8,9 @@ import { useSyncExternalStore } from "react";
  *  · Only explicit choices persist (localStorage + cookie mirror), read
  *    pre-paint by the inline bootstrap in index.html so the document's
  *    lang/dir are correct before first render — no direction flash.
- *  · Switching flips <html lang dir>, notifies subscribers, then fires a
- *    synthetic resize so the scroll system's hardRefresh re-derives the
- *    phase boundaries for the new text metrics and restores the exact
- *    scroll position — no animation jumps.
+ *  · Switching flips <html lang dir> and notifies subscribers — every
+ *    page re-renders its strings in place and the layout mirrors via
+ *    CSS logical properties.
  */
 
 export type Locale = "ar" | "en";
@@ -52,12 +51,6 @@ export function setLocale(next: Locale): void {
   listeners.forEach((listener) => {
     listener();
   });
-
-  // Text metrics changed → section heights changed. The scroll system's
-  // debounced refresh re-syncs PHASES, refreshes ScrollTrigger and restores
-  // scrollY exactly. (A dedicated event, NOT a synthetic resize: the mobile
-  // resize path ignores same-width events to survive URL-bar jitter.)
-  window.dispatchEvent(new Event("nns:refresh"));
 }
 
 export function subscribeLocale(listener: () => void): () => void {

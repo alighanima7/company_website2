@@ -1,31 +1,34 @@
 import { Html, Line, RoundedBox } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { JSX } from "react";
 import * as THREE from "three";
+import type { Line2, LineSegments2 } from "three-stdlib";
 
-import { CITY_CALLOUTS, PHASES } from "../content";
+import { CITY_CALLOUTS } from "../content";
 import { useLocale } from "../locale";
+import { clamp01, lerp, motionState, phase } from "../motion";
 import { useIsMobile } from "../responsive";
-import { clamp01, lerp, phase, scrollState } from "../scroll";
 import { SCENE, useTheme } from "../theme";
 
 /**
- * Act 04 — the Smart City: a stylized low-poly urban micro-district on a
- * circular platform. Four infrastructure pillars from the profile's Smart
+ * The Smart City platform: a stylized low-poly urban micro-district on a
+ * circular stage. Four infrastructure pillars from the profile's Smart
  * City pages sit in four quadrants — a tower cluster (smart building), a
  * parking lot with live occupancy dots, a lamp-lined street arc (smart
  * lighting), and bins + meter + inspection chamber (waste & metering) —
  * all wired to a central IoT hub by dashed data pulses, under a slowly
  * turning management ring.
  *
- * Choreography (window collarEnd→cityEnd): rises as the collar exits,
- * takes a scroll-scrubbed turn while the camera orbits, reveals each
- * pillar's bilingual callout in sequence, then sinks away as the Kingdom
- * map rises.
+ * Products-page showcase: rises on mount, spins slowly forever, streams
+ * its data pulses, and reveals each pillar's bilingual callout in a
+ * one-at-a-time loop. Reduced motion holds the lit district still.
  */
 
 const PLATFORM_R = 2.3;
+
+/** Callout carousel period (seconds) — four pillars per revolution. */
+const CYCLE = 16;
 
 /** Tower cluster (+x): [x, z, width, height]. */
 const TOWERS: ReadonlyArray<readonly [number, number, number, number]> = [
@@ -77,22 +80,30 @@ function pulsePoints(target: readonly [number, number, number]): Array<[number, 
 
 const PULSES: ReadonlyArray<Array<[number, number, number]>> = PULSE_TARGETS.map(pulsePoints);
 
-/** Callout anchors — pushed OUTSIDE the district's silhouette and spread
- *  wide so cards ring the model instead of covering buildings or each
- *  other (collision lesson, round two). */
+/** Callout anchors. The district spins continuously, so the quadrants
+ *  rotate through the camera axis — a chip must clear the model at EVERY
+ *  yaw, which means riding fully ABOVE the skyline (y ≥ 2.25, under the
+ *  toggle-corner floor) or fully BELOW the platform rim (y ≤ -0.9).
+ *  Card-to-card safety comes from the one-at-a-time reveal windows, so
+ *  the two bands can be shared. Lateral radius ≤ ~1.9 world units keeps
+ *  every chip clear of the viewport edge at any yaw. */
 const CALLOUT_ANCHORS: Record<string, readonly [number, number, number]> = {
-  building: [1.75, 2.25, -0.3],
-  parking: [-2.25, 0.75, 1.5],
-  lighting: [0.6, 1.85, -2.25],
-  waste: [-2.35, 0.18, -1.65],
+  building: [1.9, 2.25, -0.3],
+  parking: [-1.6, -0.9, 0.9],
+  lighting: [0.6, 2.25, -1.8],
+  waste: [-1.55, -0.95, -1.0],
 };
 
 export function CityScape3D(): JSX.Element {
   const root = useRef<THREE.Group>(null);
   const spinner = useRef<THREE.Group>(null);
   const ringRef = useRef<THREE.Mesh>(null);
-  const pulseRefs = useRef<Array<{ material?: { dashOffset: number; opacity: number } } | null>>([]);
+  const pulseRefs = useRef<Array<Line2 | LineSegments2 | null>>([]);
   const labelRefs = useRef<Array<HTMLDivElement | null>>([]);
+  // Callout portals mount only once the entrance settles.
+  const [calloutsLive, setCalloutsLive] = useState(false);
+  const calloutsLiveRef = useRef(false);
+  const entrance = useRef(motionState.reduced ? 1 : 0);
   const mode = useTheme();
   const locale = useLocale();
   const isMobile = useIsMobile();
@@ -134,50 +145,60 @@ export function CityScape3D(): JSX.Element {
 
   const P = SCENE[mode];
 
-  useFrame((state) => {
-    const p = scrollState.current;
+  useFrame((state, dt) => {
     const t = state.clock.elapsedTime;
-    const lp = phase(p, PHASES.collarEnd, PHASES.cityEnd);
+    const reduced = motionState.reduced;
 
-    const enter = phase(lp, 0.05, 0.2);
-    const exit = phase(lp, 0.9, 1);
-    const scale = enter * (1 - exit);
+    entrance.current = Math.min(1, entrance.current + dt * 0.55);
+    const enter = 1 - Math.pow(1 - entrance.current, 3);
+
+    const live = !reduced && entrance.current >= 1;
+    if (live !== calloutsLiveRef.current) {
+      calloutsLiveRef.current = live;
+      setCalloutsLive(live);
+    }
 
     const g = root.current;
     if (g !== null) {
-      g.visible = scale > 0.012 && !scrollState.reduced;
-      g.scale.setScalar(Math.max(0.001, scale));
-      g.position.set(0, lerp(-2.6, -0.35, enter) - exit * 2.4, 0);
+      g.visible = true;
+      g.scale.setScalar(Math.max(0.001, enter));
+      g.position.set(0, lerp(-2.6, -0.35, enter), 0);
     }
     const s = spinner.current;
     if (s !== null) {
-      s.rotation.y = t * 0.06 + lp * Math.PI * 0.9;
+      s.rotation.y = reduced ? t * 0.03 : t * 0.08;
     }
 
     // Management ring: slow counter-rotation + gentle breathing.
     const ring = ringRef.current;
     if (ring !== null) {
-      ring.rotation.z = -t * 0.18;
+      if (!reduced) ring.rotation.z = -t * 0.18;
       const m = ring.material as THREE.MeshBasicMaterial;
-      m.opacity = 0.5 * enter * (1 - exit) * (0.75 + 0.25 * Math.sin(t * 1.4));
+      m.opacity = 0.5 * enter * (reduced ? 0.75 : 0.75 + 0.25 * Math.sin(t * 1.4));
     }
 
-    // Data pulses stream hub→pillars.
+    // Data pulses stream hub→pillars once the district is up.
     pulseRefs.current.forEach((line, i) => {
       const material = line?.material;
       if (material !== undefined) {
-        material.opacity = clamp01(phase(lp, 0.18, 0.3) * 1.2 - i * 0.05) * (1 - exit);
-        material.dashOffset = -t * 0.5 - i * 0.2;
+        material.opacity = clamp01(phase(enter, 0.6, 1) * 1.2 - i * 0.05);
+        if (!reduced) material.dashOffset = -t * 0.5 - i * 0.2;
       }
     });
 
-    // Callouts reveal in sequence as the camera orbits the quadrants.
+    // Callouts reveal ONE AT A TIME on a loop — each chip's window closes
+    // before the next opens, so card-to-card stacking is impossible
+    // through the district's continuous spin.
+    const cyc = reduced || !live ? -1 : (t % CYCLE) / CYCLE;
     CITY_CALLOUTS.forEach((_, i) => {
       const el = labelRefs.current[i];
       if (el === null || el === undefined) return;
-      const window = phase(lp, 0.22 + i * 0.07, 0.34 + i * 0.07) * (1 - phase(lp, 0.84, 0.94));
-      el.style.opacity = String(window);
-      el.style.transform = `translateY(${String((1 - window) * 8)}px)`;
+      const o =
+        cyc < 0
+          ? 0
+          : phase(cyc, 0.04 + i * 0.24, 0.1 + i * 0.24) * (1 - phase(cyc, 0.2 + i * 0.24, 0.24 + i * 0.24));
+      el.style.opacity = String(o);
+      el.style.transform = `translateY(${String((1 - o) * 8)}px)`;
     });
   });
 
@@ -238,7 +259,7 @@ export function CityScape3D(): JSX.Element {
           <Line
             key={i}
             ref={(el) => {
-              pulseRefs.current[i] = el as unknown as { material?: { dashOffset: number; opacity: number } };
+              pulseRefs.current[i] = el;
             }}
             points={points}
             color={P.cityPulse}
@@ -264,7 +285,7 @@ export function CityScape3D(): JSX.Element {
             </mesh>
           </group>
         ))}
-        {calloutFor("building")}
+        {calloutsLive && calloutFor("building")}
 
         {/* ── Pillar 2 · Smart Parking: lot + occupancy dots (−x, +z) ── */}
         <mesh position={[-1.23, 0.015, 0.78]} material={mats.dark}>
@@ -280,7 +301,7 @@ export function CityScape3D(): JSX.Element {
             </mesh>
           </group>
         ))}
-        {calloutFor("parking")}
+        {calloutsLive && calloutFor("parking")}
 
         {/* ── Pillar 3 · Smart Street Lighting: lamp arc (−z) ── */}
         {LAMP_ANGLES.map((a) => {
@@ -297,7 +318,7 @@ export function CityScape3D(): JSX.Element {
             </group>
           );
         })}
-        {calloutFor("lighting")}
+        {calloutsLive && calloutFor("lighting")}
 
         {/* ── Pillar 4 · Waste + Metering (−x, −z) ── */}
         {BINS.map(([x, z], i) => (
@@ -323,7 +344,7 @@ export function CityScape3D(): JSX.Element {
           <ringGeometry args={[0.13, 0.145, 24]} />
           <meshBasicMaterial color={P.cityPulse} transparent opacity={0.8} />
         </mesh>
-        {calloutFor("waste")}
+        {calloutsLive && calloutFor("waste")}
       </group>
     </group>
   );

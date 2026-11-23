@@ -18,7 +18,7 @@ export type ThemeMode = "light" | "dark";
 export const THEME_STORAGE_KEY = "nns.theme.v2";
 export const THEME_COOKIE = "nns-v2-theme";
 /** Canvas color per theme — also the toggle cross-fade veil color. */
-export const CANVAS_COLOR: Record<ThemeMode, string> = { light: "#f4ebe1", dark: "#1e1a17" };
+export const CANVAS_COLOR: Record<ThemeMode, string> = { light: "#f3c3c8", dark: "#1e1a17" };
 
 const listeners = new Set<() => void>();
 
@@ -67,11 +67,13 @@ export function useTheme(): ThemeMode {
 
 /* ── 3D scene palettes ──────────────────────────────────────────────────
    DARK is a glow instrument: additive blending + bloom + emissive neon.
-   LIGHT is a daylight studio: a bright key + silver-blue hemisphere fill,
-   stronger IBL for crisp speculars on the navy metal, a soft contact
-   shadow grounding the object, normal blending and deep brand inks
-   (emerald #0f8a4d / security navy #0d6e9e) — additive light and low
-   bloom thresholds are invisible-or-haze on a light canvas.            */
+   LIGHT is a pastel-pink studio: matte/anodized charcoal hardware
+   (#2A2A2F / #1E1E22) under a hot white key + mint rim and stronger IBL
+   so the dark bevels and metal edges pop off the #F3C3C8 canvas, real
+   contact shadows grounding the object, normal blending, and vibrant
+   mint #22E3A2 reserved for LEDs, PCB traces and active indicators —
+   additive light and low bloom thresholds are invisible-or-haze on a
+   light canvas.                                                        */
 
 export interface ScenePalette {
   readonly canvas: string;
@@ -100,11 +102,33 @@ export interface ScenePalette {
   readonly bodyColor: string;
   readonly bodyMetalness: number;
   readonly bodyRoughness: number;
+  /** Albedo multiplier for the imported GLB device (Tracker.tsx): white
+   *  preserves the authored charcoal/PCB/brass texture; a cool tint pulls
+   *  the housing toward the navy-alloy identity under a warm key. */
+  readonly deviceTint: string;
+  /** Emissive intensity for the 3D brand logo (its baked emissive map):
+   *  a hint of life in daylight, a glow the bloom can pick up at night. */
+  readonly logoEmissive: number;
   readonly darkPartColor: string;
   readonly pcbBoardColor: string;
   readonly emissiveEmerald: number;
   readonly emissiveIce: number;
   readonly emissivePcb: number;
+  /** LED/indicator materials (base + emissive), PCB trace tint and the GPS
+   *  contact-pad metal — themed so daylight runs charcoal hardware with
+   *  mint signals while the dark theme keeps its navy/emerald identity. */
+  readonly ledBase: string;
+  readonly ledEmissive: string;
+  readonly iceBase: string;
+  readonly iceEmissive: string;
+  readonly pcbEmissive: string;
+  readonly partMetal: string;
+  /** Smart collar materials (band, hardware, stitching). */
+  readonly collarBand: string;
+  readonly collarBandDark: string;
+  readonly collarSteel: string;
+  readonly collarRivet: string;
+  readonly collarStitch: string;
   /** Kingdom map. */
   readonly slab: string;
   readonly slabMetalness: number;
@@ -132,58 +156,73 @@ export interface ScenePalette {
 
 export const SCENE: Record<ThemeMode, ScenePalette> = {
   light: {
-    // Warm earthy daylight (the 5-color system): Warm Beige #F4EBE1 canvas
-    // and fog, warm key + sand fill, Sage #2F5233 / Terracotta #C87A53 line
-    // work, brown-tinted shadows. Clarity comes from deep warm strokes on a
-    // soft ground — zero glare. The device hardware keeps its navy alloy +
-    // emerald LEDs (product identity, reads near-black on beige like a
-    // product shot on kraft paper).
-    canvas: "#f4ebe1",
-    fog: "#efe4d7",
+    // Pastel-pink studio (the 3-color system): Soft Pastel Pink #F3C3C8
+    // canvas and fog, Deep Charcoal #2A2A2F / #1E1E22 matte-anodized
+    // hardware, Vibrant Mint #22E3A2 LEDs, traces and indicators. A hot
+    // white key + mint rim + lifted IBL make the charcoal bevels and metal
+    // edges pop off the pink ground; real charcoal contact shadows anchor
+    // every model like a dark product shot on rose paper.
+    canvas: "#f3c3c8",
+    fog: "#eeb6bd",
     fogDensity: 0.02,
-    exposure: 1.08,
-    envIntensity: 0.95,
-    keyIntensity: 2.2,
-    keyColor: "#fff6ec",
-    rimIntensity: 0.75,
-    rimColor: "#3f6b46",
-    fillIntensity: 0.55,
-    fillColor: "#cdb9a4",
-    hemiIntensity: 0.5,
-    hemiSky: "#f0e2d2",
-    hemiGround: "#f4ebe1",
+    exposure: 1.1,
+    envIntensity: 1.15,
+    keyIntensity: 2.6,
+    keyColor: "#ffffff",
+    rimIntensity: 1.15,
+    rimColor: "#22e3a2",
+    fillIntensity: 0.5,
+    fillColor: "#f3c3c8",
+    hemiIntensity: 0.55,
+    hemiSky: "#fdeef0",
+    hemiGround: "#e9a9b2",
     shadows: true,
-    shadowOpacity: 0.25,
-    shadowColor: "#3e332e",
+    shadowOpacity: 0.3,
+    shadowColor: "#2a2a2f",
     bloom: false,
     vignetteDarkness: 0.22,
     vignetteOffset: 0.1,
-    bodyColor: "#123a54",
-    bodyMetalness: 0.88,
-    bodyRoughness: 0.3,
-    darkPartColor: "#102c3e",
-    pcbBoardColor: "#0d3527",
-    emissiveEmerald: 1.5,
-    emissiveIce: 1.1,
-    emissivePcb: 0.4,
-    slab: "#294733",
-    slabMetalness: 0.45,
-    slabRoughness: 0.42,
-    terrain: "#3e6b4b",
-    cityBase: "#cdbaa2",
-    cityTower: "#efe6d8",
-    cityWindowA: "#3f8f55",
-    cityWindowB: "#c87a53",
-    cityPulse: "#c87a53",
-    edge: "#6fa077",
-    edgeOpacity: 1,
-    disc: "#3e332e",
-    discOpacity: 0.12,
-    hubBeacon: "#c87a53",
-    cityBeacon: "#4e7d57",
-    arc: "#c87a53",
+    bodyColor: "#2a2a2f",
+    bodyMetalness: 0.85,
+    bodyRoughness: 0.4,
+    // The GLB's authored albedo is already matte charcoal + PCB green +
+    // brass — under the hot white key it sits on-palette untinted.
+    deviceTint: "#ffffff",
+    logoEmissive: 0.3,
+    darkPartColor: "#1e1e22",
+    pcbBoardColor: "#1e2a24",
+    emissiveEmerald: 1.7,
+    emissiveIce: 1.3,
+    emissivePcb: 0.55,
+    ledBase: "#11352a",
+    ledEmissive: "#22e3a2",
+    iceBase: "#11352a",
+    iceEmissive: "#22e3a2",
+    pcbEmissive: "#22e3a2",
+    partMetal: "#35353c",
+    collarBand: "#2a2a2f",
+    collarBandDark: "#1e1e22",
+    collarSteel: "#3d3d45",
+    collarRivet: "#17171b",
+    collarStitch: "#f3c3c8",
+    slab: "#26262b",
+    slabMetalness: 0.5,
+    slabRoughness: 0.45,
+    terrain: "#34343b",
+    cityBase: "#2a2a2f",
+    cityTower: "#3c3c44",
+    cityWindowA: "#22e3a2",
+    cityWindowB: "#f3c3c8",
+    cityPulse: "#22e3a2",
+    edge: "#22e3a2",
+    edgeOpacity: 0.9,
+    disc: "#2a2a2f",
+    discOpacity: 0.14,
+    hubBeacon: "#22e3a2",
+    cityBeacon: "#22e3a2",
+    arc: "#22e3a2",
     arcWidth: 2.4,
-    scan: "#4e8c5b",
+    scan: "#22e3a2",
     glowBlending: THREE.NormalBlending,
     columnOpacity: 0.95,
   },
@@ -216,11 +255,27 @@ export const SCENE: Record<ThemeMode, ScenePalette> = {
     bodyColor: "#0b2436",
     bodyMetalness: 0.82,
     bodyRoughness: 0.32,
+    // Cool steel pull: the ivory key + terracotta fill would brown the
+    // black housing; this keeps the night device on its navy-alloy side.
+    deviceTint: "#c9d6e6",
+    logoEmissive: 1.15,
     darkPartColor: "#071722",
     pcbBoardColor: "#0c2e21",
     emissiveEmerald: 2.2,
     emissiveIce: 1.6,
     emissivePcb: 0.55,
+    // The values the components used to hardcode — dark is untouched.
+    ledBase: "#0c3f27",
+    ledEmissive: "#3fd98b",
+    iceBase: "#0a2c3d",
+    iceEmissive: "#4fc3e8",
+    pcbEmissive: "#2aa368",
+    partMetal: "#8a6d2f",
+    collarBand: "#8a5733",
+    collarBandDark: "#5f3a20",
+    collarSteel: "#b4bfc9",
+    collarRivet: "#46535f",
+    collarStitch: "#d9b98e",
     slab: "#241f1a",
     slabMetalness: 0.5,
     slabRoughness: 0.45,

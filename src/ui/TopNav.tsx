@@ -27,13 +27,12 @@ export function TopNav(): JSX.Element {
         <span className="frame-corner br" />
       </div>
 
-      {/* Brand mark → home */}
+      {/* Brand mark → home. The real company logo (temporary raster cut
+          from 3d_model/nns-logo.png — swap for the master SVG when the
+          company provides it); the link carries the accessible name. */}
       <a className="hud-brand" href={hrefFor("home")} aria-label={locale === "ar" ? "الرئيسية" : "Home"}>
-        <span className="hud-shield">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M12 3l8 3v6c0 4.6-3.2 7.9-8 9-4.8-1.1-8-4.4-8-9V6z" />
-            <path d="m9 12 2 2 4-4" />
-          </svg>
+        <span className="hud-logo-plate">
+          <img className="hud-logo" src="/brand/nns-logo-cut.png" alt="" />
         </span>
         <span className="hud-brand-name">{BRAND.nameAr}</span>
         <span className="hud-brand-en mono">{BRAND.nameEn}</span>

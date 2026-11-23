@@ -2,17 +2,19 @@
    NNS v2 — cinematic command-center design system, dual theme.
    Multi-page edition: fixed 3D stage behind, routed DOM pages above.
 
-   Brand palette, 60-30-10 (hex values are contractual — never alter):
-   LIGHT (base, default): Cream #F1E6CF canvas 60% · Deep Green #2F4A3B
-   text/headings/panels/footer/cards 30% · Orange #FF5A26 accent 10% —
-   orange is FILLS/BORDERS/UNDERLINES/SHAPES only on cream (2.52:1, fails
-   as type); text on orange fills is always #1C1D20 (5.41:1).
-   DARK: Charcoal #1C1D20 canvas 60% · Gray #5A6068 cards/panels/
-   decorative borders 30% · Orange #FF5A26 accent 10% — orange MAY be
-   text/links on the charcoal canvas (5.41:1) but NEVER on gray cards
-   (2.04:1 — cream text there) · main text Cream #F1E6CF (13.61:1).
-   #5A6068 never carries text on the canvas (2.65:1) — secondary text is
-   cream at 72% instead.
+   Brand palette, 60-30-10 — EXTRACTED from the company logo
+   (3d_model/nns-logo.png): shield/text teal #19586A and palm green
+   #198948 are the only true brand inks; deep teal #0C3845, paper
+   #F0F6F4, night #0B1619, card #16333C and glow-green #3FD97F are
+   DERIVED from them. Orange #FF5A26 is demoted to the WARNING role only.
+   LIGHT (base, default): cool paper #F0F6F4 canvas 60% · teal panels/
+   text 30% · green accents 10% — green NEVER carries normal-size text
+   (max 4.74:1 against black) and never sits raw on teal (1.78:1): the
+   glow variant carries on-surface signals.
+   DARK: #0B1619 teal-black canvas 60% · #16333C teal cards 30% · green
+   10% with glow-green #3FD97F as link/signal voice (10.0:1 on canvas).
+   Warning orange may be text on dark grounds (5.9:1) but on light it
+   drops to the derived #A8390E (5.89:1).
 
    Contract (mirrors production): light lives on bare :root, dark is an
    explicit override, NO prefers-color-scheme anywhere — the inline
@@ -127,97 +129,100 @@
   --lh-body: 1.85; /* Arabic needs the generous ride height */
 
   /* ── Light core (60-30-10) ──────────────────────────────────────────── */
-  --bg: #f1e6cf; /* 60% cream canvas */
-  --surface: #2f4a3b; /* 30% green — panels, cards, footer */
-  --text: #2f4a3b; /* 7.84:1 on cream */
-  --text-muted: rgba(47, 74, 59, 0.78); /* 4.54:1 composite on cream */
-  --accent: #ff5a26; /* 10% — fills/borders/shapes only on cream (2.52:1) */
-  --on-accent: #1c1d20; /* 5.41:1 on orange — never white */
-  --border: rgba(47, 74, 59, 0.62); /* functional borders, 3.13:1 */
-  --focus: #2f4a3b; /* ring on cream (orange fails 3:1 here) */
+  --bg: #f0f6f4; /* 60% cool paper */
+  --surface: #19586a; /* 30% brand teal — panels, cards */
+  --text: #19586a; /* 7.26:1 on paper */
+  --text-muted: rgba(25, 88, 106, 0.86); /* 5.44:1 composite */
+  --accent: #198948; /* 10% palm green — fills/borders/shapes, never body text */
+  --on-accent: #03161b; /* large labels on green fills (4.15 — UI/large only) */
+  --border: rgba(25, 88, 106, 0.72); /* functional borders, 3.77:1 */
+  --focus: #0c3845;
+  --warning: #ff5a26; /* demoted: warning/alert signal ONLY, never brand */
 
-  /* On-surface family (inside green panels) — the surface scope rebinds
+  /* On-surface family (inside teal panels) — the surface scope rebinds
      the contextual slots to these. */
-  --text-on-surface: #f1e6cf; /* 7.84:1 on green */
-  --muted-on-surface: rgba(241, 230, 207, 0.82); /* 5.88:1 composite */
-  --line-on-surface: rgba(241, 230, 207, 0.24);
-  --border-on-surface: rgba(241, 230, 207, 0.62);
-  --link-on-surface: #f1e6cf;
-  --tag-on-surface: #f1e6cf;
-  --signal-on-surface: #ff5a26; /* 3.12:1 on green — non-text UI ok */
-  --focus-on-surface: #f1e6cf;
-  --err-on-surface: #ffb4a6;
-  --frame-rgb-on-surface: 241, 230, 207;
-  --scrollbar-on-surface: rgba(241, 230, 207, 0.5);
+  --text-on-surface: #f0f6f4; /* 7.26:1 on teal */
+  --muted-on-surface: rgba(240, 246, 244, 0.82); /* 5.49:1 composite */
+  --line-on-surface: rgba(240, 246, 244, 0.24);
+  --border-on-surface: rgba(240, 246, 244, 0.62);
+  --link-on-surface: #f0f6f4;
+  --tag-on-surface: #f0f6f4;
+  --signal-on-surface: #3fd97f; /* glow — raw green is 1.78:1 on teal */
+  --focus-on-surface: #f0f6f4;
+  --err-on-surface: #ffc9b4; /* warning text on teal, 5.39:1 */
+  --frame-rgb-on-surface: 240, 246, 244;
+  --scrollbar-on-surface: rgba(240, 246, 244, 0.5);
 
   /* ── Extended slots (every recipe below reads these) ────────────────── */
   --ink: var(--text);
   --dim: var(--text-muted);
   --faint: var(--text-muted);
-  --heading: var(--text);
-  --emerald-bright: #2f4a3b; /* instrument-tag TEXT slot — green (orange fails as type) */
-  --ice: #2f4a3b;
-  --signal: #ff5a26; /* NON-TEXT accents: ticks, dots, spines, fills */
-  --signal-2: #ff5a26;
-  --accent-rgb: 47, 74, 59; /* framing: corners, spines, stat brackets */
-  /* CTA split: --cta carries CTA/link TEXT + focus outlines (green for
-     AA on cream); --cta-rgb carries orange hover borders & washes. */
-  --cta: #2f4a3b;
-  --cta-rgb: 255, 90, 38;
-  --accent-soft-bg: rgba(255, 90, 38, 0.14);
-  /* Solid accent buttons: orange fill + near-black label (5.41:1). */
-  --btn-bg: #ff5a26;
-  --btn-ink: #1c1d20;
-  --line: rgba(47, 74, 59, 0.3); /* decorative hairline on cream */
+  --heading: #0c3845; /* derived deep teal — display type, 11.5:1 */
+  --emerald-bright: #19586a; /* instrument-tag TEXT slot (green fails as type) */
+  --ice: #19586a;
+  --signal: #198948; /* NON-TEXT accents: ticks, dots, spines, fills */
+  --signal-2: #198948;
+  --accent-rgb: 25, 88, 106; /* framing: corners, spines, stat brackets */
+  /* CTA split: --cta carries CTA/link TEXT + focus outlines (teal for
+     the 5:1 bar); --cta-rgb carries palm-green hover borders & washes. */
+  --cta: #19586a;
+  --cta-rgb: 25, 137, 72;
+  --accent-soft-bg: rgba(25, 137, 72, 0.12);
+  /* Primary buttons: deep-teal fill + paper label (11.5:1) — the palm
+     green rings/glows them instead of filling them: #198948 can't hold
+     normal-size text (max 4.74:1), per the approved audit. */
+  --btn-bg: #0c3845;
+  --btn-ink: #f0f6f4;
+  --line: rgba(25, 88, 106, 0.3); /* decorative hairline on paper */
   --corner-alpha: 0.68;
-  /* Form validation — deep crimson, 6.4:1 on cream. */
-  --err: #a1273a;
-  /* Green glass panels floating on the cream canvas: the scene diffuses
-     through a frosted #2F4A3B fill; cream type holds 7.84:1 at the solid
-     worst case (the no-backdrop fallback hardens to near-opaque green). */
-  --tile-bg: rgba(47, 74, 59, 0.88);
+  /* Form validation = the warning role: derived deep orange, 5.89:1. */
+  --err: #a8390e;
+  /* Teal glass panels floating on the paper canvas: the scene diffuses
+     through a frosted #19586A fill; paper type holds 7.26:1 at the solid
+     worst case (the no-backdrop fallback hardens to near-opaque teal). */
+  --tile-bg: rgba(25, 88, 106, 0.9);
   --tile-backdrop: blur(18px) saturate(1.4);
-  --tile-shadow: 0 1px 2px rgba(28, 29, 32, 0.12), 0 10px 26px rgba(47, 74, 59, 0.28),
-    inset 0 1px 0 rgba(241, 230, 207, 0.14);
-  --glass-edge: rgba(241, 230, 207, 0.32);
+  --tile-shadow: 0 1px 2px rgba(6, 18, 22, 0.12), 0 10px 26px rgba(25, 88, 106, 0.28),
+    inset 0 1px 0 rgba(240, 246, 244, 0.14);
+  --glass-edge: rgba(240, 246, 244, 0.32);
   --glass-rim: linear-gradient(
     140deg,
-    rgba(255, 90, 38, 0.9),
-    rgba(241, 230, 207, 0.85) 26%,
-    rgba(255, 90, 38, 0.14) 55%,
-    rgba(255, 90, 38, 0.75)
+    rgba(25, 137, 72, 0.9),
+    rgba(240, 246, 244, 0.85) 26%,
+    rgba(25, 137, 72, 0.14) 55%,
+    rgba(25, 137, 72, 0.75)
   );
-  --glass-flare-a: rgba(255, 90, 38, 0.18);
-  --glass-flare-b: rgba(241, 230, 207, 0.25);
+  --glass-flare-a: rgba(25, 137, 72, 0.16);
+  --glass-flare-b: rgba(240, 246, 244, 0.25);
   --panel-backdrop: blur(20px) saturate(1.45);
-  --panel-shadow: 0 1px 2px rgba(28, 29, 32, 0.1), 0 24px 56px rgba(47, 74, 59, 0.34),
-    0 0 34px rgba(255, 90, 38, 0.1), inset 0 1px 0 rgba(241, 230, 207, 0.16);
-  --panel-grad-inline: linear-gradient(to left, rgba(47, 74, 59, 0.94), rgba(47, 74, 59, 0.78));
-  --panel-grad-block: linear-gradient(to bottom, rgba(47, 74, 59, 0.94), rgba(47, 74, 59, 0.78));
-  --callout-bg: rgba(47, 74, 59, 0.92);
-  --callout-border: 1px solid rgba(255, 90, 38, 0.55);
-  --callout-glow: 0 0 20px rgba(255, 90, 38, 0.16);
-  --toggle-bg: rgba(47, 74, 59, 0.88);
-  --label-halo: 0 1px 10px rgba(241, 230, 207, 0.95);
-  /* Clean-studio light: no scanline texture — unbroken cream canvas. */
+  --panel-shadow: 0 1px 2px rgba(6, 18, 22, 0.1), 0 24px 56px rgba(25, 88, 106, 0.34),
+    0 0 34px rgba(25, 137, 72, 0.1), inset 0 1px 0 rgba(240, 246, 244, 0.16);
+  --panel-grad-inline: linear-gradient(to left, rgba(25, 88, 106, 0.94), rgba(25, 88, 106, 0.78));
+  --panel-grad-block: linear-gradient(to bottom, rgba(25, 88, 106, 0.94), rgba(25, 88, 106, 0.78));
+  --callout-bg: rgba(25, 88, 106, 0.92);
+  --callout-border: 1px solid rgba(63, 217, 127, 0.5);
+  --callout-glow: 0 0 20px rgba(25, 137, 72, 0.18);
+  --toggle-bg: rgba(25, 88, 106, 0.9);
+  --label-halo: 0 1px 10px rgba(240, 246, 244, 0.95);
+  /* Clean-studio light: no scanline texture — unbroken paper canvas. */
   --scan-line: transparent;
   --scan-blend: normal;
-  /* Orange halo behind the green display type. */
-  --h1-glow: drop-shadow(0 2px 18px rgba(255, 90, 38, 0.3));
+  /* Palm-green halo behind the deep-teal display type. */
+  --h1-glow: drop-shadow(0 2px 18px rgba(25, 137, 72, 0.3));
   --stat-glow: none;
-  --shield-glow: drop-shadow(0 1px 8px rgba(255, 90, 38, 0.55));
-  --tick-glow: 0 0 9px rgba(255, 90, 38, 0.7);
-  --sel-bg: rgba(255, 90, 38, 0.85);
-  --sel-ink: #1c1d20;
-  --scrollbar: rgba(47, 74, 59, 0.5);
+  --shield-glow: drop-shadow(0 1px 8px rgba(25, 137, 72, 0.55));
+  --tick-glow: 0 0 9px rgba(25, 137, 72, 0.7);
+  --sel-bg: rgba(63, 217, 127, 0.85);
+  --sel-ink: #03161b;
+  --scrollbar: rgba(25, 88, 106, 0.5);
   --mono: var(--font-mono);
   /* Photo-overlay slots (domain cards — same in both themes: the scrim
-     makes its own dark context). Cream 15.4:1, orange 6.1:1 on scrim. */
-  --photo-scrim-a: rgba(28, 29, 32, 0.93);
-  --photo-scrim-b: rgba(28, 29, 32, 0.35);
-  --on-photo: #f1e6cf;
-  --on-photo-dim: rgba(241, 230, 207, 0.85);
-  --photo-accent: #ff5a26;
+     makes its own dark context). Paper 16:1, glow-green 9:1 on scrim. */
+  --photo-scrim-a: rgba(6, 18, 22, 0.93);
+  --photo-scrim-b: rgba(6, 18, 22, 0.35);
+  --on-photo: #f0f6f4;
+  --on-photo-dim: rgba(240, 246, 244, 0.85);
+  --photo-accent: #3fd97f;
 }
 
 html[lang="en"] {
@@ -227,79 +232,82 @@ html[lang="en"] {
 
 :root[data-theme="dark"] {
   /* ── Dark core (60-30-10) ───────────────────────────────────────────── */
-  --bg: #1c1d20; /* 60% charcoal canvas */
-  --surface: #5a6068; /* 30% gray — cards, panels, decorative borders */
-  --text: #f1e6cf; /* 13.61:1 — same cream as light, ties the themes */
-  --text-muted: rgba(241, 230, 207, 0.72); /* 7.63:1 composite */
-  --accent: #ff5a26; /* text/links allowed on the canvas (5.41:1) */
-  --on-accent: #1c1d20;
-  --border: rgba(241, 230, 207, 0.38); /* functional borders, 3.09:1 */
-  --focus: #ff5a26; /* ring on canvas (5.41:1) */
+  --bg: #0b1619; /* 60% teal-black canvas (derived from the shield hue) */
+  --surface: #16333c; /* 30% mid-dark teal — cards, panels */
+  --text: #f0f6f4; /* 16.79:1 — the light paper, ties the themes */
+  --text-muted: rgba(240, 246, 244, 0.72); /* 9.01:1 composite */
+  --accent: #198948; /* brand green: structure + large/UI only (4.12:1) */
+  --accent-glow: #3fd97f; /* derived signal voice — links/body-capable, 10:1 */
+  --on-accent: #03161b;
+  --border: rgba(240, 246, 244, 0.4); /* functional borders, 3.62:1 */
+  --focus: #3fd97f; /* ring on canvas (10:1) */
+  --warning: #ff5a26; /* warning/alert signal only — 5.9:1 on this canvas */
 
-  --text-on-surface: #f1e6cf; /* 5.13:1 on #5A6068 */
-  --muted-on-surface: rgba(241, 230, 207, 0.9); /* 4.52:1 composite */
-  --line-on-surface: rgba(241, 230, 207, 0.22);
-  --border-on-surface: rgba(241, 230, 207, 0.62);
-  --link-on-surface: #f1e6cf; /* orange is 2.04:1 on gray — cream links there */
-  --tag-on-surface: #f1e6cf;
-  --signal-on-surface: #f1e6cf;
-  --focus-on-surface: #f1e6cf;
-  --err-on-surface: #ffd3c9;
-  --frame-rgb-on-surface: 241, 230, 207;
-  --scrollbar-on-surface: rgba(241, 230, 207, 0.45);
+  --text-on-surface: #f0f6f4; /* 12.2:1 on #16333C */
+  --muted-on-surface: rgba(240, 246, 244, 0.85); /* 9.26:1 composite */
+  --line-on-surface: rgba(240, 246, 244, 0.22);
+  --border-on-surface: rgba(240, 246, 244, 0.55);
+  --link-on-surface: #3fd97f; /* glow-green holds 7.28:1 on cards */
+  --tag-on-surface: #3fd97f;
+  --signal-on-surface: #3fd97f;
+  --focus-on-surface: #f0f6f4;
+  --err-on-surface: #ff8a5c; /* warning text on cards, 5.75:1 */
+  --frame-rgb-on-surface: 240, 246, 244;
+  --scrollbar-on-surface: rgba(240, 246, 244, 0.45);
 
   --ink: var(--text);
   --dim: var(--text-muted);
   --faint: var(--text-muted);
   --heading: var(--text);
-  --emerald-bright: #ff5a26; /* instrument tags on the canvas = orange type */
-  --ice: #ff8a5c; /* lighter orange data-accent, 7.5:1 on canvas */
-  --signal: #ff5a26;
-  --signal-2: #ff8a5c;
-  --accent-rgb: 241, 230, 207; /* cream framing on the charcoal canvas */
-  --cta: #ff5a26;
-  --cta-rgb: 255, 90, 38;
-  --accent-soft-bg: rgba(255, 90, 38, 0.16);
-  --btn-bg: #ff5a26;
-  --btn-ink: #1c1d20;
-  --line: rgba(90, 96, 104, 0.55); /* decorative gray hairline */
+  --emerald-bright: #3fd97f; /* instrument tags on the canvas = glow type */
+  --ice: #7fe3ac; /* lighter glow data-accent */
+  --signal: #3fd97f;
+  --signal-2: #198948;
+  --accent-rgb: 240, 246, 244; /* paper framing on the teal-black canvas */
+  --cta: #3fd97f;
+  --cta-rgb: 63, 217, 127;
+  --accent-soft-bg: rgba(25, 137, 72, 0.18);
+  /* Primary buttons: glow-green fill + near-black label (10.1:1). */
+  --btn-bg: #3fd97f;
+  --btn-ink: #03161b;
+  --line: rgba(25, 88, 106, 0.55); /* decorative teal hairline */
   --corner-alpha: 0.6;
-  --err: #ffb4a6;
-  /* Gray glass cards: frosted #5A6068 that hardens to the exact solid in
-     the no-backdrop fallback — cream text audited at that worst case. */
-  --tile-bg: rgba(90, 96, 104, 0.55);
+  --err: #ff8a5c; /* warning text on the canvas, 7.91:1 */
+  /* Teal glass cards: frosted #16333C that hardens to the exact solid in
+     the no-backdrop fallback — paper text audited at that worst case. */
+  --tile-bg: rgba(22, 51, 60, 0.6);
   --tile-backdrop: blur(18px) saturate(1.3);
   --tile-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 30px rgba(0, 0, 0, 0.38),
-    inset 0 1px 0 rgba(241, 230, 207, 0.08);
-  --glass-edge: rgba(241, 230, 207, 0.16);
+    inset 0 1px 0 rgba(240, 246, 244, 0.08);
+  --glass-edge: rgba(240, 246, 244, 0.16);
   --glass-rim: linear-gradient(
     140deg,
-    rgba(255, 90, 38, 0.85),
-    rgba(241, 230, 207, 0.4) 26%,
-    rgba(255, 90, 38, 0.16) 55%,
-    rgba(255, 90, 38, 0.7)
+    rgba(63, 217, 127, 0.85),
+    rgba(240, 246, 244, 0.4) 26%,
+    rgba(63, 217, 127, 0.16) 55%,
+    rgba(25, 137, 72, 0.7)
   );
-  --glass-flare-a: rgba(255, 90, 38, 0.15);
-  --glass-flare-b: rgba(241, 230, 207, 0.12);
+  --glass-flare-a: rgba(63, 217, 127, 0.14);
+  --glass-flare-b: rgba(240, 246, 244, 0.12);
   --panel-backdrop: blur(20px) saturate(1.35);
   --panel-shadow: 0 1px 2px rgba(0, 0, 0, 0.32), 0 26px 58px rgba(0, 0, 0, 0.5),
-    0 0 32px rgba(255, 90, 38, 0.1), inset 0 1px 0 rgba(241, 230, 207, 0.09);
-  --panel-grad-inline: linear-gradient(to left, rgba(90, 96, 104, 0.72), rgba(90, 96, 104, 0.5));
-  --panel-grad-block: linear-gradient(to bottom, rgba(90, 96, 104, 0.72), rgba(90, 96, 104, 0.5));
-  --callout-bg: rgba(74, 79, 86, 0.88);
-  --callout-border: 1px solid rgba(255, 90, 38, 0.45);
-  --callout-glow: 0 0 20px rgba(255, 90, 38, 0.18);
-  --toggle-bg: rgba(90, 96, 104, 0.5);
-  --label-halo: 0 2px 10px rgba(28, 29, 32, 0.95);
-  --scan-line: rgba(241, 230, 207, 0.02);
+    0 0 32px rgba(25, 137, 72, 0.12), inset 0 1px 0 rgba(240, 246, 244, 0.09);
+  --panel-grad-inline: linear-gradient(to left, rgba(22, 51, 60, 0.78), rgba(22, 51, 60, 0.55));
+  --panel-grad-block: linear-gradient(to bottom, rgba(22, 51, 60, 0.78), rgba(22, 51, 60, 0.55));
+  --callout-bg: rgba(18, 42, 50, 0.88);
+  --callout-border: 1px solid rgba(63, 217, 127, 0.45);
+  --callout-glow: 0 0 20px rgba(63, 217, 127, 0.16);
+  --toggle-bg: rgba(22, 51, 60, 0.6);
+  --label-halo: 0 2px 10px rgba(6, 18, 22, 0.95);
+  --scan-line: rgba(240, 246, 244, 0.02);
   --scan-blend: overlay;
-  --h1-glow: drop-shadow(0 0 24px rgba(255, 90, 38, 0.28));
-  --stat-glow: 0 0 16px rgba(255, 90, 38, 0.35);
-  --shield-glow: drop-shadow(0 0 9px rgba(255, 90, 38, 0.5));
-  --tick-glow: 0 0 9px rgba(255, 90, 38, 0.7);
-  --sel-bg: rgba(255, 90, 38, 0.85);
-  --sel-ink: #1c1d20;
-  --scrollbar: rgba(241, 230, 207, 0.4);
+  --h1-glow: drop-shadow(0 0 24px rgba(63, 217, 127, 0.25));
+  --stat-glow: 0 0 16px rgba(63, 217, 127, 0.32);
+  --shield-glow: drop-shadow(0 0 9px rgba(63, 217, 127, 0.5));
+  --tick-glow: 0 0 9px rgba(63, 217, 127, 0.7);
+  --sel-bg: rgba(63, 217, 127, 0.85);
+  --sel-ink: #03161b;
+  --scrollbar: rgba(240, 246, 244, 0.4);
 }
 
 /* No backdrop-filter (old engines): the frost does the legibility work, so
@@ -307,18 +315,18 @@ html[lang="en"] {
    audit was run against. The rim/flare dressing still renders. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root {
-    --tile-bg: rgba(47, 74, 59, 0.97);
-    --callout-bg: rgba(47, 74, 59, 0.98);
-    --toggle-bg: rgba(47, 74, 59, 0.96);
-    --panel-grad-inline: linear-gradient(to left, rgba(47, 74, 59, 0.98), rgba(47, 74, 59, 0.94));
-    --panel-grad-block: linear-gradient(to bottom, rgba(47, 74, 59, 0.98), rgba(47, 74, 59, 0.94));
+    --tile-bg: rgba(25, 88, 106, 0.97);
+    --callout-bg: rgba(25, 88, 106, 0.98);
+    --toggle-bg: rgba(25, 88, 106, 0.96);
+    --panel-grad-inline: linear-gradient(to left, rgba(25, 88, 106, 0.98), rgba(25, 88, 106, 0.94));
+    --panel-grad-block: linear-gradient(to bottom, rgba(25, 88, 106, 0.98), rgba(25, 88, 106, 0.94));
   }
   :root[data-theme="dark"] {
-    --tile-bg: rgba(90, 96, 104, 0.95);
-    --callout-bg: rgba(90, 96, 104, 0.97);
-    --toggle-bg: rgba(90, 96, 104, 0.94);
-    --panel-grad-inline: linear-gradient(to left, rgba(90, 96, 104, 0.97), rgba(90, 96, 104, 0.9));
-    --panel-grad-block: linear-gradient(to bottom, rgba(90, 96, 104, 0.97), rgba(90, 96, 104, 0.9));
+    --tile-bg: rgba(22, 51, 60, 0.95);
+    --callout-bg: rgba(22, 51, 60, 0.97);
+    --toggle-bg: rgba(22, 51, 60, 0.94);
+    --panel-grad-inline: linear-gradient(to left, rgba(22, 51, 60, 0.97), rgba(22, 51, 60, 0.9));
+    --panel-grad-block: linear-gradient(to bottom, rgba(22, 51, 60, 0.97), rgba(22, 51, 60, 0.9));
   }
 }
 
@@ -488,13 +496,29 @@ main summary,
   text-decoration: none;
 }
 
-.hud-shield {
-  width: 30px;
-  height: 30px;
-  color: var(--emerald-bright);
-  filter: var(--shield-glow);
+/* The logo art is never recolored; its clear-space is the plate padding.
+   Dark theme slips a paper plate behind it — the teal wordmark would
+   vanish on the night canvas otherwise. (Raster cut = temporary until
+   the company supplies the SVG + a reversed variant.) */
+.hud-logo-plate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  padding: 2px;
 }
-.hud-shield svg { width: 100%; height: 100%; }
+:root[data-theme="dark"] .hud-logo-plate {
+  background: var(--text); /* = the paper neutral in dark */
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+  padding: 4px;
+}
+.hud-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
 
 .hud-brand-name {
   font-weight: 700;
@@ -1586,7 +1610,7 @@ a:focus-visible {
     inset-inline-start: 16px;
     gap: 8px;
   }
-  .hud-shield { width: 26px; height: 26px; }
+  .hud-logo-plate { width: 32px; height: 32px; border-radius: 8px; }
   .hud-brand-name { font-size: 13px; }
   .hud-brand-en { display: none; }
   .theme-toggle {

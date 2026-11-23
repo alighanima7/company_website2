@@ -18,7 +18,7 @@ export type ThemeMode = "light" | "dark";
 export const THEME_STORAGE_KEY = "nns.theme.v2";
 export const THEME_COOKIE = "nns-v2-theme";
 /** Canvas color per theme — also the toggle cross-fade veil color. */
-export const CANVAS_COLOR: Record<ThemeMode, string> = { light: "#F1E6CF", dark: "#1C1D20" };
+export const CANVAS_COLOR: Record<ThemeMode, string> = { light: "#F0F6F4", dark: "#0B1619" };
 
 const listeners = new Set<() => void>();
 
@@ -66,14 +66,15 @@ export function useTheme(): ThemeMode {
 }
 
 /* ── 3D scene palettes ──────────────────────────────────────────────────
-   The 60-30-10 brand carried into the scene: the canvas is the 60%
-   dominant (#F1E6CF cream studio / #1C1D20 charcoal night), structural
+   The logo-extracted brand carried into the scene: the canvas is the 60%
+   dominant (#F0F6F4 paper studio / #0B1619 teal-black night), structural
    materials (map slab, city blocks, collar, housings) sit on the 30%
-   green/gray secondary, and ORANGE #FF5A26 is the single 10% signal
-   voice — LEDs, scan sweeps, arcs, beacons, window glow, rim light.
-   DARK is a glow instrument (additive blending + bloom, retuned for the
-   orange emissives); LIGHT is a clean studio under a hot white key with
-   real contact shadows and normal blending.                            */
+   teal secondary, and the PALM GREEN #198948 (with its derived glow
+   #3FD97F in the dark room) is the single 10% signal voice — LEDs, scan
+   sweeps, arcs, beacons, window glow, rim light. Orange appears nowhere
+   in the scene: it is the DOM's warning role only. DARK is a glow
+   instrument (additive blending + bloom); LIGHT is a clean studio under
+   a hot white key with real contact shadows and normal blending.       */
 
 export interface ScenePalette {
   readonly canvas: string;
@@ -153,8 +154,8 @@ export interface ScenePalette {
   readonly glowBlending: THREE.Blending;
   readonly columnOpacity: number;
   /** FMC product-stage backdrop glow behind the device (null = flat
-   *  canvas). Dark needs it — the black units vanish on #1C1D20
-   *  (verified by A/B renders); light separates fine on cream. */
+   *  canvas). Dark needs it — the black units vanish on the night
+   *  canvas (verified by A/B renders); light separates fine on paper. */
   readonly stageGlow: string | null;
   /** Smart-city window glass bases — tinted dark panes under the
    *  emissive windows (formerly hardcoded in CityScape3D). */
@@ -164,150 +165,150 @@ export interface ScenePalette {
 
 export const SCENE: Record<ThemeMode, ScenePalette> = {
   light: {
-    // Cream studio (60-30-10): #F1E6CF canvas and fog, Deep Green
-    // #2F4A3B structural hardware (map slab, city, collar, housings),
-    // Orange #FF5A26 as the only signal voice — LEDs, scan, arcs,
-    // beacons, and a warm orange rim. A hot white key + lifted IBL pop
-    // the dark models off the cream ground; real green-charcoal contact
-    // shadows anchor them like a product shot on paper.
-    canvas: "#F1E6CF",
-    fog: "#e6d9bc",
+    // Paper studio (60-30-10): #F0F6F4 canvas and fog, brand teal
+    // #19586A structural hardware (map slab, city, collar, housings),
+    // palm green #198948 as the only signal voice — LEDs, scan, arcs,
+    // beacons, and the rim. A hot white key + lifted IBL pop the dark
+    // models off the cool paper; real deep-teal contact shadows anchor
+    // them like a product shot.
+    canvas: "#F0F6F4",
+    fog: "#dfeae7",
     fogDensity: 0.02,
     exposure: 1.1,
     envIntensity: 1.15,
     keyIntensity: 2.6,
     keyColor: "#ffffff",
     rimIntensity: 1.0,
-    rimColor: "#FF5A26",
+    rimColor: "#198948",
     fillIntensity: 0.5,
-    fillColor: "#F1E6CF",
+    fillColor: "#F0F6F4",
     hemiIntensity: 0.55,
-    hemiSky: "#fbf3e0",
-    hemiGround: "#d9c9a6",
+    hemiSky: "#fafdfc",
+    hemiGround: "#cfdeda",
     shadows: true,
     shadowOpacity: 0.3,
-    shadowColor: "#2F4A3B",
+    shadowColor: "#0c3845",
     bloom: false,
     vignetteDarkness: 0.22,
     vignetteOffset: 0.1,
-    bodyColor: "#2F4A3B",
+    bodyColor: "#19586A",
     bodyMetalness: 0.85,
     bodyRoughness: 0.4,
     // The GLB's authored albedo is already matte charcoal + PCB green +
     // brass — under the hot white key it sits on-palette untinted.
     deviceTint: "#ffffff",
     logoEmissive: 0.3,
-    darkPartColor: "#22332a",
-    pcbBoardColor: "#1e2a24",
+    darkPartColor: "#0e2e38",
+    pcbBoardColor: "#0f2b26",
     emissiveEmerald: 1.7,
     emissiveIce: 1.3,
     emissivePcb: 0.55,
-    ledBase: "#4a2314",
-    ledEmissive: "#FF5A26",
-    iceBase: "#4a2314",
-    iceEmissive: "#ff8a5c",
-    pcbEmissive: "#FF5A26",
-    partMetal: "#3a4a41",
-    collarBand: "#2F4A3B",
-    collarBandDark: "#243a2e",
-    collarSteel: "#58685e",
-    collarRivet: "#1C1D20",
-    collarStitch: "#F1E6CF",
-    slab: "#2F4A3B",
+    ledBase: "#0a3a22",
+    ledEmissive: "#198948",
+    iceBase: "#0a3a22",
+    iceEmissive: "#3fd97f",
+    pcbEmissive: "#198948",
+    partMetal: "#2f5560",
+    collarBand: "#19586A",
+    collarBandDark: "#0c3845",
+    collarSteel: "#557c88",
+    collarRivet: "#06262e",
+    collarStitch: "#F0F6F4",
+    slab: "#19586A",
     slabMetalness: 0.5,
     slabRoughness: 0.45,
-    terrain: "#3a5847",
-    cityBase: "#2F4A3B",
-    cityTower: "#3e5a4a",
-    cityWindowA: "#FF5A26",
-    cityWindowB: "#F1E6CF",
-    cityPulse: "#FF5A26",
-    edge: "#FF5A26",
+    terrain: "#2e6e64",
+    cityBase: "#19586A",
+    cityTower: "#246a7e",
+    cityWindowA: "#198948",
+    cityWindowB: "#F0F6F4",
+    cityPulse: "#198948",
+    edge: "#198948",
     edgeOpacity: 0.9,
-    disc: "#2F4A3B",
+    disc: "#19586A",
     discOpacity: 0.14,
-    hubBeacon: "#FF5A26",
-    cityBeacon: "#FF5A26",
-    arc: "#FF5A26",
+    hubBeacon: "#198948",
+    cityBeacon: "#198948",
+    arc: "#198948",
     arcWidth: 2.4,
-    scan: "#FF5A26",
+    scan: "#198948",
     glowBlending: THREE.NormalBlending,
     columnOpacity: 0.95,
     stageGlow: null,
-    cityGlassA: "#4a2314",
-    cityGlassB: "#3e3426",
+    cityGlassA: "#0a3a22",
+    cityGlassB: "#0e3e4d",
   },
   dark: {
-    // Charcoal night (60-30-10): #1C1D20 canvas and fog, #5A6068-family
-    // gray structures, cream key light, and ORANGE as every glowing
-    // signal — rim, fill pools, LEDs, scan, beacons — picked up by the
-    // bloom. The FMC stage gets a #5A6068 radial glow disc so the black
-    // units silhouette instead of melting into the canvas.
-    canvas: "#1C1D20",
-    fog: "#1C1D20",
+    // Teal night (60-30-10): #0B1619 canvas and fog, #16333C-family teal
+    // structures, paper key light, and GREEN as every glowing signal —
+    // rim, fill pools, LEDs, scan, beacons — picked up by the bloom. The
+    // FMC stage gets a teal radial glow disc so the black units
+    // silhouette instead of melting into the canvas (A/B re-run below).
+    canvas: "#0B1619",
+    fog: "#0B1619",
     fogDensity: 0.026,
     exposure: 1.0,
     envIntensity: 0.5,
     keyIntensity: 1.7,
-    keyColor: "#F1E6CF",
+    keyColor: "#F0F6F4",
     rimIntensity: 0.9,
-    rimColor: "#FF5A26",
+    rimColor: "#3fd97f",
     fillIntensity: 0.3,
-    fillColor: "#FF5A26",
+    fillColor: "#198948",
     hemiIntensity: 0,
-    hemiSky: "#3a3b40",
-    hemiGround: "#1C1D20",
+    hemiSky: "#2a3b40",
+    hemiGround: "#0B1619",
     shadows: false,
     shadowOpacity: 0,
     shadowColor: "#000000",
     bloom: true,
     vignetteDarkness: 0.78,
     vignetteOffset: 0.18,
-    bodyColor: "#343941",
+    bodyColor: "#1c3b45",
     bodyMetalness: 0.82,
     bodyRoughness: 0.32,
-    // Neutral steel pull: keeps the night devices on the cool slate side
-    // under the cream key, without the old navy cast.
-    deviceTint: "#c9ccd2",
+    // Cool teal-steel pull keeps the night devices in the brand family
+    // under the paper key.
+    deviceTint: "#c6d4d6",
     logoEmissive: 1.15,
-    darkPartColor: "#15161a",
-    pcbBoardColor: "#1f2622",
+    darkPartColor: "#0a1e24",
+    pcbBoardColor: "#0e2b24",
     emissiveEmerald: 2.2,
     emissiveIce: 1.6,
     emissivePcb: 0.55,
-    ledBase: "#4a2314",
-    ledEmissive: "#FF5A26",
-    iceBase: "#51291a",
-    iceEmissive: "#ff8a5c",
-    pcbEmissive: "#FF5A26",
-    partMetal: "#8a8f96",
-    collarBand: "#6e5f4b",
-    collarBandDark: "#4a4036",
-    collarSteel: "#b9bdc4",
-    collarRivet: "#3a3e44",
-    collarStitch: "#F1E6CF",
-    slab: "#24262a",
+    ledBase: "#0a3a22",
+    ledEmissive: "#3fd97f",
+    iceBase: "#0a3a22",
+    iceEmissive: "#7fe3ac",
+    pcbEmissive: "#35c473",
+    partMetal: "#7e939b",
+    collarBand: "#4e6a66",
+    collarBandDark: "#35494c",
+    collarSteel: "#afc2c6",
+    collarRivet: "#2a3c42",
+    collarStitch: "#F0F6F4",
+    slab: "#10242b",
     slabMetalness: 0.5,
     slabRoughness: 0.45,
-    terrain: "#303832",
-    cityBase: "#2a2d32",
-    cityTower: "#383c43",
-    cityWindowA: "#FF5A26",
-    cityWindowB: "#F1E6CF",
-    cityPulse: "#FF5A26",
-    edge: "#FF5A26",
+    terrain: "#1e4038",
+    cityBase: "#132b33",
+    cityTower: "#1e4450",
+    cityWindowA: "#3fd97f",
+    cityWindowB: "#F0F6F4",
+    cityPulse: "#3fd97f",
+    edge: "#3fd97f",
     edgeOpacity: 0.6,
-    disc: "#3a3e44",
+    disc: "#1e4450",
     discOpacity: 0.5,
-    hubBeacon: "#FF5A26",
-    cityBeacon: "#ff8a5c",
-    arc: "#FF5A26",
+    hubBeacon: "#3fd97f",
+    cityBeacon: "#7fe3ac",
+    arc: "#3fd97f",
     arcWidth: 1.6,
-    scan: "#ff8a5c",
+    scan: "#7fe3ac",
     glowBlending: THREE.AdditiveBlending,
     columnOpacity: 0.7,
-    stageGlow: "#5A6068",
-    cityGlassA: "#4a2314",
-    cityGlassB: "#3e3426",
+    stageGlow: "#1E4450",
+    cityGlassA: "#0a3a22",
+    cityGlassB: "#0e3e4d",
   },
 };

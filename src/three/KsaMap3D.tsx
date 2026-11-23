@@ -29,6 +29,22 @@ import { SCENE, useTheme } from "../theme";
 const MAP_SCALE = 1 / 34; // 400×360 source units → ~11.7×10.5 world units
 const SURFACE_Y = 0.26; // extrusion top in slab-local space
 
+/* ── Act 1 — the scroll reveal ──────────────────────────────────────────
+   At p=0 ONLY the logo exists: the map group is hidden outright (zero
+   draw cost). The reveal replaces the old emerge stage: the slab travels
+   the depth axis from MAP_START_DEPTH to the stage plane while fading
+   and gently scaling in, fully opaque well before it docks. Scrubbed by
+   scroll alone — scrolling back sends the Kingdom into the deep again.
+   Keep MAP_REVEAL_END below 0.6: ignition (0.6→0.95) and the arc link
+   (0.66→0.98) assume the slab has already arrived. */
+const MAP_REVEAL_START = 0.02;
+const MAP_REVEAL_END = 0.55;
+/** Park depth at reveal=0, world z — far behind the logo, deep in fog. */
+const MAP_START_DEPTH = -16;
+const MAP_START_DEPTH_MOBILE = -13;
+/** Stage plane the slab docks at (unchanged final position). */
+const MAP_STAGE_Z = -0.5;
+
 function toWorld(x: number, y: number): [number, number] {
   return [(x - 200) * MAP_SCALE, (y - 180) * MAP_SCALE];
 }
@@ -146,12 +162,44 @@ function buildTerrainGeometry(): THREE.BufferGeometry {
   return geometry;
 }
 
-export function KsaMap3D(): JSX.Element {
+/** Defer shell: the heavy geometry build (terrain point-in-polygon grid
+ *  + extrude) runs AFTER first paint, so the logo's first frame never
+ *  waits on it. If the user scrolls before idle fires (~a frame or two),
+ *  the scene mounts straight into the pose the current scroll dictates —
+ *  no pop from origin, the damped value carries it on. */
+export function KsaMap3D(): JSX.Element | null {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (typeof w.requestIdleCallback === "function") {
+      const id = w.requestIdleCallback(() => {
+        setReady(true);
+      }, { timeout: 300 });
+      return () => {
+        w.cancelIdleCallback?.(id);
+      };
+    }
+    const id = window.setTimeout(() => {
+      setReady(true);
+    }, 50);
+    return () => {
+      window.clearTimeout(id);
+    };
+  }, []);
+  return ready ? <KsaMapScene /> : null;
+}
+
+function KsaMapScene(): JSX.Element {
   const root = useRef<THREE.Group>(null);
   const beaconRefs = useRef<Array<THREE.Group | null>>([]);
   const ringRefs = useRef<Array<THREE.Mesh | null>>([]);
   const scanRef = useRef<THREE.Mesh>(null);
   const scanMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const edgeMatRef = useRef<THREE.LineBasicMaterial>(null);
+  const discMatRef = useRef<THREE.MeshBasicMaterial>(null);
   const arcRefs = useRef<Array<Line2 | LineSegments2 | null>>([]);
   const labelRefs = useRef<Array<HTMLDivElement | null>>([]);
   // City-label <Html> portals mount only once the passage brings the slab
@@ -254,15 +302,18 @@ export function KsaMap3D(): JSX.Element {
     });
   }, []);
 
-  /* ── Per-frame choreography: scroll-staged depth emergence ──────────── */
+  /* ── Per-frame choreography: scroll-staged depth reveal ─────────────── */
   useFrame((state) => {
     const t = state.clock.elapsedTime;
     const reduced = motionState.reduced;
     const p = homeScroll.current;
 
-    // The passage, all on the Z-axis: deep park → stage plane. Ignition
-    // and linking trail the arrival so the map lights up AS it lands.
-    const emerge = phase(p, 0.38, 0.82);
+    // Act 1 — the reveal: solo-logo open, then the Kingdom travels in
+    // from the deep, opaque well before docking. Reduced motion skips
+    // the travel and shows the final composition outright. Ignition and
+    // linking keep their original windows and trail the arrival.
+    const reveal = reduced ? 1 : phase(p, MAP_REVEAL_START, MAP_REVEAL_END);
+    const fadeIn = phase(reveal, 0, 0.6);
     const ignite = phase(p, 0.6, 0.95);
     const link = phase(p, 0.66, 0.98);
 
@@ -274,18 +325,39 @@ export function KsaMap3D(): JSX.Element {
 
     const g = root.current;
     if (g !== null) {
-      g.visible = true;
-      // Composition slot: constant height and scale — depth alone carries
-      // the drama. Phones shrink the slab to the narrow frame instead of
-      // dollying the lens deeper into the fog.
-      g.scale.setScalar(viewport.isMobile ? 0.52 : 0.8);
+      // Hidden outright at scroll 0 — the renderer skips the whole group,
+      // so the solo logo costs nothing extra. Everything below derives
+      // from the live scroll value, so the first visible frame (including
+      // a mid-page reload) is already in the correct mid-travel pose.
+      g.visible = reveal > 0.001;
+      if (!g.visible) return;
+      // Composition slot: constant height — depth carries the drama, with
+      // a whisper of scale growth as the slab closes in. Phones shrink
+      // the slab to the narrow frame instead of dollying the lens deeper.
+      g.scale.setScalar((viewport.isMobile ? 0.52 : 0.8) * lerp(0.92, 1, reveal));
       g.position.set(
         0,
         viewport.isMobile ? -1.08 : -1.62,
-        lerp(viewport.isMobile ? -6.4 : -7.5, -0.5, emerge),
+        lerp(viewport.isMobile ? MAP_START_DEPTH_MOBILE : MAP_START_DEPTH, MAP_STAGE_Z, reveal),
       );
       g.rotation.y = reduced ? 0 : Math.sin(t * 0.05) * 0.02;
     }
+
+    // Fade the four rest-state surfaces with the travel. The slab and
+    // terrain enter the transparent pass only WHILE translucent (depth
+    // writes stay on — correct self-occlusion, no seams), and return to
+    // plain opaque rendering the moment the fade completes. The map is
+    // strictly farther than the logo throughout, so the transparent-pass
+    // far-to-near order always paints it behind the emblem — no flicker.
+    const fading = fadeIn < 1;
+    slabMaterial.transparent = fading;
+    slabMaterial.opacity = fadeIn;
+    terrainMaterial.transparent = fading;
+    terrainMaterial.opacity = fadeIn;
+    const edgeMat = edgeMatRef.current;
+    if (edgeMat !== null) edgeMat.opacity = P.edgeOpacity * fadeIn;
+    const discMat = discMatRef.current;
+    if (discMat !== null) discMat.opacity = P.discOpacity * fadeIn;
 
     // Beacons ignite with stagger as the slab reaches its stage plane.
     CITIES.forEach((_city, i) => {
@@ -345,14 +417,14 @@ export function KsaMap3D(): JSX.Element {
       <mesh geometry={slabGeometry} material={slabMaterial} castShadow />
       <mesh geometry={terrainGeometry} material={terrainMaterial} castShadow />
       <lineSegments geometry={edgeGeometry}>
-        <lineBasicMaterial color={P.edge} transparent opacity={P.edgeOpacity} />
+        <lineBasicMaterial ref={edgeMatRef} color={P.edge} transparent opacity={0} />
       </lineSegments>
 
       {/* Ground disc under the slab: glow pool in the dark, soft contact
-          shadow in daylight. */}
+          shadow in daylight. Fades in with the reveal like the slab. */}
       <mesh position={[0, -0.6, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <circleGeometry args={[9.5, 48]} />
-        <meshBasicMaterial color={P.disc} transparent opacity={P.discOpacity} />
+        <meshBasicMaterial ref={discMatRef} color={P.disc} transparent opacity={0} />
       </mesh>
 
       {/* City beacons — each group sits at its city's terrain elevation */}

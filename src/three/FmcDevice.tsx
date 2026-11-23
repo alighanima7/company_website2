@@ -142,9 +142,9 @@ interface PartState {
 }
 
 /** Soft radial backdrop behind the device — SCENE.stageGlow decides per
- *  theme (dark: #5A6068 halo so the black units silhouette instead of
- *  melting into the #1C1D20 canvas — chosen over the flat variant by A/B
- *  renders; light: null, the cream canvas separates on its own). */
+ *  theme (dark: a mid-teal halo so the black units silhouette instead of
+ *  melting into the night canvas — chosen over the flat variant by A/B
+ *  renders; light: null, the paper canvas separates on its own). */
 function StageGlow({ color }: { color: string }): JSX.Element {
   const texture = useMemo(() => {
     const canvas = document.createElement("canvas");

@@ -141,11 +141,56 @@ interface PartState {
   readonly chip?: { readonly callout: PartCallout; readonly at: readonly [number, number, number] };
 }
 
+/** Soft radial backdrop behind the device — SCENE.stageGlow decides per
+ *  theme (dark: #5A6068 halo so the black units silhouette instead of
+ *  melting into the #1C1D20 canvas — chosen over the flat variant by A/B
+ *  renders; light: null, the cream canvas separates on its own). */
+function StageGlow({ color }: { color: string }): JSX.Element {
+  const texture = useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext("2d");
+    if (ctx !== null) {
+      // Parse the hex directly — THREE.Color would convert to linear
+      // components (color management) and paint the gradient near-black.
+      const hex = color.replace("#", "");
+      const rgb = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(", ");
+      const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+      g.addColorStop(0, `rgba(${rgb}, 1)`);
+      g.addColorStop(0.55, `rgba(${rgb}, 0.6)`);
+      g.addColorStop(1, `rgba(${rgb}, 0)`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 256, 256);
+    }
+    // Deliberately left in linear interpretation: the halo reads a stop
+    // brighter than the literal hex, which is the A/B-approved look —
+    // tagging it sRGB dims it into the canvas.
+    return new THREE.CanvasTexture(canvas);
+  }, [color]);
+
+  useEffect(() => {
+    return () => {
+      texture.dispose();
+    };
+  }, [texture]);
+
+  return (
+    <mesh position={[0, 0.3, -1.8]} scale={4.4}>
+      <circleGeometry args={[1, 48]} />
+      <meshBasicMaterial map={texture} transparent fog={false} depthWrite={false} />
+    </mesh>
+  );
+}
+
 /** Suspense shell: the GLB decodes off the critical path — the stage's
  *  lights and the page DOM never wait on it. */
 export function FmcDevice({ id }: { id: FmcId }): JSX.Element {
+  const mode = useTheme();
+  const glow = SCENE[mode].stageGlow;
   return (
     <Suspense fallback={null}>
+      {glow !== null && <StageGlow color={glow} />}
       <FmcModel id={id} />
     </Suspense>
   );

@@ -2,174 +2,358 @@
    NNS v2 — cinematic command-center design system, dual theme.
    Multi-page edition: fixed 3D stage behind, routed DOM pages above.
 
-   LIGHT (base, default): pastel-pink studio — Soft Pastel Pink #F3C3C8
-   canvas, crisp White #FFFFFF cards, Deep Charcoal #2A2A2F ink/headings/
-   borders/framing, Vibrant Mint #22E3A2 for NON-TEXT interactive accents
-   only (ticks, fills, dots, spines, glows — mint sits at ~1.07:1 against
-   the pink canvas, so typography beside it is always charcoal).
-   DARK (`:root[data-theme="dark"]`): warm luxury night — Brown-Gray
-   #1E1A17 canvas, Dark Beige #2A2420 cards, Bright Sage #6B8E6F
-   headings/accents, Ivory #EAE5E0 text, Bright Terracotta #DD8D65 CTAs.
+   Brand palette, 60-30-10 (hex values are contractual — never alter):
+   LIGHT (base, default): Cream #F1E6CF canvas 60% · Deep Green #2F4A3B
+   text/headings/panels/footer/cards 30% · Orange #FF5A26 accent 10% —
+   orange is FILLS/BORDERS/UNDERLINES/SHAPES only on cream (2.52:1, fails
+   as type); text on orange fills is always #1C1D20 (5.41:1).
+   DARK: Charcoal #1C1D20 canvas 60% · Gray #5A6068 cards/panels/
+   decorative borders 30% · Orange #FF5A26 accent 10% — orange MAY be
+   text/links on the charcoal canvas (5.41:1) but NEVER on gray cards
+   (2.04:1 — cream text there) · main text Cream #F1E6CF (13.61:1).
+   #5A6068 never carries text on the canvas (2.65:1) — secondary text is
+   cream at 72% instead.
 
    Contract (mirrors production): light lives on bare :root, dark is an
    explicit override, NO prefers-color-scheme anywhere — the inline
    bootstrap + theme.ts own the attribute. Every recipe below reads
-   tokens only; never hardcode a theme color outside these two blocks.
+   tokens only; never hardcode a theme color outside these blocks. Glass
+   panels REBIND the contextual slots (see the surface scope after the
+   theme blocks) so panel interiors flip to on-surface colors without
+   touching component rules.
    ════════════════════════════════════════════════════════════════════════ */
 
+/* ── Self-hosted IBM Plex (woff2, script-subset, swap) ──────────────────
+   Arabic ships the arabic subset ONLY: Latin letters inside Arabic copy
+   fall through to IBM Plex Sans by construction. The two fallback faces
+   carry approximate Plex metrics (size-adjust + overrides) so the swap
+   from Tahoma/Arial barely shifts layout.                               */
+@font-face {
+  font-family: "IBM Plex Sans Arabic";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-sans-arabic-arabic-400-normal.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+08A0-08FF, U+200C-200E, U+2010-2011,
+    U+FB50-FDFF, U+FE70-FEFF;
+}
+@font-face {
+  font-family: "IBM Plex Sans Arabic";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-sans-arabic-arabic-600-normal.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+08A0-08FF, U+200C-200E, U+2010-2011,
+    U+FB50-FDFF, U+FE70-FEFF;
+}
+@font-face {
+  font-family: "IBM Plex Sans Arabic";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-sans-arabic-arabic-700-normal.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+08A0-08FF, U+200C-200E, U+2010-2011,
+    U+FB50-FDFF, U+FE70-FEFF;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-sans-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+2000-206F, U+20AC, U+2122, U+2212, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-sans-latin-600-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+2000-206F, U+20AC, U+2122, U+2212, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-sans-latin-700-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+2000-206F, U+20AC, U+2122, U+2212, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-latin-600-normal.woff2") format("woff2");
+}
+/* Metric-adjusted local stand-ins (approximate Plex metrics — tuned to
+   minimize reflow, not to be pixel-exact). */
+@font-face {
+  font-family: "Plex Arabic Fallback";
+  src: local("Tahoma");
+  size-adjust: 97%;
+  ascent-override: 108%;
+  descent-override: 55%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Plex Latin Fallback";
+  src: local("Arial");
+  size-adjust: 100.5%;
+  ascent-override: 102.5%;
+  descent-override: 27.5%;
+  line-gap-override: 0%;
+}
+
 :root {
-  /* ── Light = the pastel-pink 3-color system ─────────────────────────
-     Soft Pastel Pink #F3C3C8 canvas · crisp White #FFFFFF cards & HUD
-     panels · Deep Charcoal #2A2A2F headings, body text, borders & UI
-     framing (9.1:1 on pink, 14.3:1 on white) · Vibrant Mint #22E3A2
-     interactive accents, active ticks, fills & CTA highlights. Mint
-     NEVER carries text on light surfaces (≈1.07:1 on pink, 1.67:1 on
-     white) — accent TYPE slots resolve to charcoal, and mint pops
-     beside it as fills, dots, spines, borders and glows.              */
-  --bg: #f3c3c8;
-  --ink: #2a2a2f; /* deep charcoal — all body text */
-  --dim: #4a4a52;
-  --faint: #55555e; /* WCAG AA: 4.7:1 on the pink canvas, 7.4:1 on white */
-  --heading: #2a2a2f; /* charcoal — major headings & identity */
-  --emerald-bright: #2a2a2f; /* accent TEXT slot = charcoal (mint fails AA as type) */
-  --ice: #2a2a2f; /* data-accent text slot = charcoal, same rule */
-  --signal: #22e3a2; /* vibrant mint — NON-TEXT accents only */
-  --signal-2: #22e3a2;
-  --accent-rgb: 42, 42, 47; /* charcoal framing: corners, spines, stat brackets */
-  /* CTA split: --cta carries CTA/link TEXT + focus outlines (charcoal for
-     AA); --cta-rgb carries the mint hover borders & washes (non-text). */
-  --cta: #2a2a2f;
-  --cta-rgb: 34, 227, 162;
-  --accent-soft-bg: rgba(34, 227, 162, 0.16);
-  /* Solid accent buttons: mint fill + charcoal label (8.6:1). */
-  --btn-bg: #22e3a2;
-  --btn-ink: #2a2a2f;
-  --line: #dcacb4; /* dusty-rose hairline — delicate but present on pink */
+  /* ── Typography tokens — selected by html[lang] ───────────────────── */
+  --font-ar: "IBM Plex Sans Arabic", "IBM Plex Sans", "Plex Arabic Fallback", Tahoma, system-ui,
+    sans-serif;
+  --font-en: "IBM Plex Sans", "Plex Latin Fallback", "Segoe UI", system-ui, sans-serif;
+  /* Mono carries English instrument text; the Arabic family backs it so
+     any Arabic character inside a mono slot still joins correctly. */
+  --font-mono: "IBM Plex Mono", "IBM Plex Sans Arabic", ui-monospace, Consolas, monospace;
+  --font-body: var(--font-ar);
+  --lh-body: 1.85; /* Arabic needs the generous ride height */
+
+  /* ── Light core (60-30-10) ──────────────────────────────────────────── */
+  --bg: #f1e6cf; /* 60% cream canvas */
+  --surface: #2f4a3b; /* 30% green — panels, cards, footer */
+  --text: #2f4a3b; /* 7.84:1 on cream */
+  --text-muted: rgba(47, 74, 59, 0.78); /* 4.54:1 composite on cream */
+  --accent: #ff5a26; /* 10% — fills/borders/shapes only on cream (2.52:1) */
+  --on-accent: #1c1d20; /* 5.41:1 on orange — never white */
+  --border: rgba(47, 74, 59, 0.62); /* functional borders, 3.13:1 */
+  --focus: #2f4a3b; /* ring on cream (orange fails 3:1 here) */
+
+  /* On-surface family (inside green panels) — the surface scope rebinds
+     the contextual slots to these. */
+  --text-on-surface: #f1e6cf; /* 7.84:1 on green */
+  --muted-on-surface: rgba(241, 230, 207, 0.82); /* 5.88:1 composite */
+  --line-on-surface: rgba(241, 230, 207, 0.24);
+  --border-on-surface: rgba(241, 230, 207, 0.62);
+  --link-on-surface: #f1e6cf;
+  --tag-on-surface: #f1e6cf;
+  --signal-on-surface: #ff5a26; /* 3.12:1 on green — non-text UI ok */
+  --focus-on-surface: #f1e6cf;
+  --err-on-surface: #ffb4a6;
+  --frame-rgb-on-surface: 241, 230, 207;
+  --scrollbar-on-surface: rgba(241, 230, 207, 0.5);
+
+  /* ── Extended slots (every recipe below reads these) ────────────────── */
+  --ink: var(--text);
+  --dim: var(--text-muted);
+  --faint: var(--text-muted);
+  --heading: var(--text);
+  --emerald-bright: #2f4a3b; /* instrument-tag TEXT slot — green (orange fails as type) */
+  --ice: #2f4a3b;
+  --signal: #ff5a26; /* NON-TEXT accents: ticks, dots, spines, fills */
+  --signal-2: #ff5a26;
+  --accent-rgb: 47, 74, 59; /* framing: corners, spines, stat brackets */
+  /* CTA split: --cta carries CTA/link TEXT + focus outlines (green for
+     AA on cream); --cta-rgb carries orange hover borders & washes. */
+  --cta: #2f4a3b;
+  --cta-rgb: 255, 90, 38;
+  --accent-soft-bg: rgba(255, 90, 38, 0.14);
+  /* Solid accent buttons: orange fill + near-black label (5.41:1). */
+  --btn-bg: #ff5a26;
+  --btn-ink: #1c1d20;
+  --line: rgba(47, 74, 59, 0.3); /* decorative hairline on cream */
   --corner-alpha: 0.68;
-  /* Form validation — deep crimson, AA on white and pink fills. */
+  /* Form validation — deep crimson, 6.4:1 on cream. */
   --err: #a1273a;
-  /* Glowing glass cards floating on the pink canvas: high-translucency
-     frosted white (the fill gradient is densest where the type starts) so
-     the scene diffuses through, a mint refraction rim, mint/white edge
-     flares. Charcoal ink holds AA even over the occasional charcoal
-     flyby (≥4.5:1 at the dense core). */
-  --tile-bg: rgba(255, 255, 255, 0.66);
-  --tile-backdrop: blur(18px) saturate(1.5);
-  --tile-shadow: 0 1px 2px rgba(42, 42, 47, 0.06), 0 10px 26px rgba(173, 102, 115, 0.26),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  --glass-edge: rgba(255, 255, 255, 0.65);
+  /* Green glass panels floating on the cream canvas: the scene diffuses
+     through a frosted #2F4A3B fill; cream type holds 7.84:1 at the solid
+     worst case (the no-backdrop fallback hardens to near-opaque green). */
+  --tile-bg: rgba(47, 74, 59, 0.88);
+  --tile-backdrop: blur(18px) saturate(1.4);
+  --tile-shadow: 0 1px 2px rgba(28, 29, 32, 0.12), 0 10px 26px rgba(47, 74, 59, 0.28),
+    inset 0 1px 0 rgba(241, 230, 207, 0.14);
+  --glass-edge: rgba(241, 230, 207, 0.32);
   --glass-rim: linear-gradient(
     140deg,
-    rgba(34, 227, 162, 0.9),
-    rgba(255, 255, 255, 0.95) 26%,
-    rgba(34, 227, 162, 0.16) 55%,
-    rgba(34, 227, 162, 0.78)
+    rgba(255, 90, 38, 0.9),
+    rgba(241, 230, 207, 0.85) 26%,
+    rgba(255, 90, 38, 0.14) 55%,
+    rgba(255, 90, 38, 0.75)
   );
-  --glass-flare-a: rgba(34, 227, 162, 0.2);
-  --glass-flare-b: rgba(255, 255, 255, 0.55);
-  --panel-backdrop: blur(20px) saturate(1.6);
-  --panel-shadow: 0 1px 2px rgba(42, 42, 47, 0.05), 0 24px 56px rgba(173, 102, 115, 0.32),
-    0 0 34px rgba(34, 227, 162, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.65);
-  --panel-grad-inline: linear-gradient(to left, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.46));
-  --panel-grad-block: linear-gradient(to bottom, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.46));
-  --callout-bg: rgba(255, 255, 255, 0.82);
-  --callout-border: 1px solid rgba(34, 227, 162, 0.5);
-  --callout-glow: 0 0 20px rgba(34, 227, 162, 0.15);
-  --toggle-bg: rgba(255, 255, 255, 0.66);
-  --label-halo: 0 1px 10px rgba(243, 195, 200, 0.95);
-  /* Clean-studio light: no scanline texture — unbroken pink canvas. */
+  --glass-flare-a: rgba(255, 90, 38, 0.18);
+  --glass-flare-b: rgba(241, 230, 207, 0.25);
+  --panel-backdrop: blur(20px) saturate(1.45);
+  --panel-shadow: 0 1px 2px rgba(28, 29, 32, 0.1), 0 24px 56px rgba(47, 74, 59, 0.34),
+    0 0 34px rgba(255, 90, 38, 0.1), inset 0 1px 0 rgba(241, 230, 207, 0.16);
+  --panel-grad-inline: linear-gradient(to left, rgba(47, 74, 59, 0.94), rgba(47, 74, 59, 0.78));
+  --panel-grad-block: linear-gradient(to bottom, rgba(47, 74, 59, 0.94), rgba(47, 74, 59, 0.78));
+  --callout-bg: rgba(47, 74, 59, 0.92);
+  --callout-border: 1px solid rgba(255, 90, 38, 0.55);
+  --callout-glow: 0 0 20px rgba(255, 90, 38, 0.16);
+  --toggle-bg: rgba(47, 74, 59, 0.88);
+  --label-halo: 0 1px 10px rgba(241, 230, 207, 0.95);
+  /* Clean-studio light: no scanline texture — unbroken cream canvas. */
   --scan-line: transparent;
   --scan-blend: normal;
-  /* Mint halo behind the charcoal display type. */
-  --h1-glow: drop-shadow(0 2px 18px rgba(34, 227, 162, 0.5));
+  /* Orange halo behind the green display type. */
+  --h1-glow: drop-shadow(0 2px 18px rgba(255, 90, 38, 0.3));
   --stat-glow: none;
-  --shield-glow: drop-shadow(0 1px 8px rgba(34, 227, 162, 0.65));
-  --tick-glow: 0 0 9px rgba(34, 227, 162, 0.85);
-  --sel-bg: rgba(34, 227, 162, 0.4);
-  --sel-ink: #2a2a2f;
-  --scrollbar: rgba(42, 42, 47, 0.45);
-  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  --shield-glow: drop-shadow(0 1px 8px rgba(255, 90, 38, 0.55));
+  --tick-glow: 0 0 9px rgba(255, 90, 38, 0.7);
+  --sel-bg: rgba(255, 90, 38, 0.85);
+  --sel-ink: #1c1d20;
+  --scrollbar: rgba(47, 74, 59, 0.5);
+  --mono: var(--font-mono);
+  /* Photo-overlay slots (domain cards — same in both themes: the scrim
+     makes its own dark context). Cream 15.4:1, orange 6.1:1 on scrim. */
+  --photo-scrim-a: rgba(28, 29, 32, 0.93);
+  --photo-scrim-b: rgba(28, 29, 32, 0.35);
+  --on-photo: #f1e6cf;
+  --on-photo-dim: rgba(241, 230, 207, 0.85);
+  --photo-accent: #ff5a26;
+}
+
+html[lang="en"] {
+  --font-body: var(--font-en);
+  --lh-body: 1.6;
 }
 
 :root[data-theme="dark"] {
-  /* ── Dark = the warm luxury tactical system ─────────────────────────
-     Dark Brownish-Gray #1E1A17 canvas (no stark black) · Dark Beige
-     #2A2420 cards & containers · Bright Sage #6B8E6F headings & brand
-     accents · Ivory #EAE5E0 body text (no halation) · Bright Terracotta
-     #DD8D65 CTAs, interactive highlights & attention.                  */
-  --bg: #1e1a17;
-  --ink: #eae5e0; /* ivory — all body text */
-  --dim: #b3a89d;
-  --faint: #9a9083; /* lifted for WCAG AA: 4.9:1 on the dark-beige cards */
-  --heading: #6b8e6f; /* bright sage — major titles & identity */
-  --emerald-bright: #6b8e6f;
-  --ice: #dd8d65; /* data accent slot = bright terracotta */
-  --signal: #6b8e6f;
-  --signal-2: #dd8d65;
-  --accent-rgb: 107, 142, 111;
-  --cta: #dd8d65;
-  --cta-rgb: 221, 141, 101;
-  --accent-soft-bg: rgba(107, 142, 111, 0.12);
-  /* Solid accent buttons: terracotta fill + canvas-dark label (7.2:1). */
-  --btn-bg: #dd8d65;
-  --btn-ink: #1e1a17;
-  --line: rgba(234, 229, 224, 0.13);
+  /* ── Dark core (60-30-10) ───────────────────────────────────────────── */
+  --bg: #1c1d20; /* 60% charcoal canvas */
+  --surface: #5a6068; /* 30% gray — cards, panels, decorative borders */
+  --text: #f1e6cf; /* 13.61:1 — same cream as light, ties the themes */
+  --text-muted: rgba(241, 230, 207, 0.72); /* 7.63:1 composite */
+  --accent: #ff5a26; /* text/links allowed on the canvas (5.41:1) */
+  --on-accent: #1c1d20;
+  --border: rgba(241, 230, 207, 0.38); /* functional borders, 3.09:1 */
+  --focus: #ff5a26; /* ring on canvas (5.41:1) */
+
+  --text-on-surface: #f1e6cf; /* 5.13:1 on #5A6068 */
+  --muted-on-surface: rgba(241, 230, 207, 0.9); /* 4.52:1 composite */
+  --line-on-surface: rgba(241, 230, 207, 0.22);
+  --border-on-surface: rgba(241, 230, 207, 0.62);
+  --link-on-surface: #f1e6cf; /* orange is 2.04:1 on gray — cream links there */
+  --tag-on-surface: #f1e6cf;
+  --signal-on-surface: #f1e6cf;
+  --focus-on-surface: #f1e6cf;
+  --err-on-surface: #ffd3c9;
+  --frame-rgb-on-surface: 241, 230, 207;
+  --scrollbar-on-surface: rgba(241, 230, 207, 0.45);
+
+  --ink: var(--text);
+  --dim: var(--text-muted);
+  --faint: var(--text-muted);
+  --heading: var(--text);
+  --emerald-bright: #ff5a26; /* instrument tags on the canvas = orange type */
+  --ice: #ff8a5c; /* lighter orange data-accent, 7.5:1 on canvas */
+  --signal: #ff5a26;
+  --signal-2: #ff8a5c;
+  --accent-rgb: 241, 230, 207; /* cream framing on the charcoal canvas */
+  --cta: #ff5a26;
+  --cta-rgb: 255, 90, 38;
+  --accent-soft-bg: rgba(255, 90, 38, 0.16);
+  --btn-bg: #ff5a26;
+  --btn-ink: #1c1d20;
+  --line: rgba(90, 96, 104, 0.55); /* decorative gray hairline */
   --corner-alpha: 0.6;
-  /* Validation — lifted salmon, 5.2:1 on the dark-beige card fill. */
-  --err: #e89b8b;
-  --tile-bg: rgba(42, 36, 32, 0.62);
-  --tile-backdrop: blur(18px) saturate(1.5);
+  --err: #ffb4a6;
+  /* Gray glass cards: frosted #5A6068 that hardens to the exact solid in
+     the no-backdrop fallback — cream text audited at that worst case. */
+  --tile-bg: rgba(90, 96, 104, 0.55);
+  --tile-backdrop: blur(18px) saturate(1.3);
   --tile-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 30px rgba(0, 0, 0, 0.38),
-    inset 0 1px 0 rgba(234, 229, 224, 0.06);
-  --glass-edge: rgba(234, 229, 224, 0.14);
+    inset 0 1px 0 rgba(241, 230, 207, 0.08);
+  --glass-edge: rgba(241, 230, 207, 0.16);
   --glass-rim: linear-gradient(
     140deg,
-    rgba(107, 142, 111, 0.85),
-    rgba(234, 229, 224, 0.4) 26%,
-    rgba(221, 141, 101, 0.18) 55%,
-    rgba(221, 141, 101, 0.7)
+    rgba(255, 90, 38, 0.85),
+    rgba(241, 230, 207, 0.4) 26%,
+    rgba(255, 90, 38, 0.16) 55%,
+    rgba(255, 90, 38, 0.7)
   );
-  --glass-flare-a: rgba(107, 142, 111, 0.17);
-  --glass-flare-b: rgba(221, 141, 101, 0.15);
-  --panel-backdrop: blur(20px) saturate(1.6);
+  --glass-flare-a: rgba(255, 90, 38, 0.15);
+  --glass-flare-b: rgba(241, 230, 207, 0.12);
+  --panel-backdrop: blur(20px) saturate(1.35);
   --panel-shadow: 0 1px 2px rgba(0, 0, 0, 0.32), 0 26px 58px rgba(0, 0, 0, 0.5),
-    0 0 32px rgba(107, 142, 111, 0.12), inset 0 1px 0 rgba(234, 229, 224, 0.07);
-  --panel-grad-inline: linear-gradient(to left, rgba(42, 36, 32, 0.82), rgba(42, 36, 32, 0.55));
-  --panel-grad-block: linear-gradient(to bottom, rgba(42, 36, 32, 0.82), rgba(42, 36, 32, 0.55));
-  --callout-bg: rgba(42, 36, 32, 0.8);
-  --callout-border: 1px solid rgba(107, 142, 111, 0.42);
-  --callout-glow: 0 0 20px rgba(107, 142, 111, 0.16);
-  --toggle-bg: rgba(42, 36, 32, 0.62);
-  --label-halo: 0 2px 10px rgba(30, 26, 23, 0.95);
-  --scan-line: rgba(234, 229, 224, 0.02);
+    0 0 32px rgba(255, 90, 38, 0.1), inset 0 1px 0 rgba(241, 230, 207, 0.09);
+  --panel-grad-inline: linear-gradient(to left, rgba(90, 96, 104, 0.72), rgba(90, 96, 104, 0.5));
+  --panel-grad-block: linear-gradient(to bottom, rgba(90, 96, 104, 0.72), rgba(90, 96, 104, 0.5));
+  --callout-bg: rgba(74, 79, 86, 0.88);
+  --callout-border: 1px solid rgba(255, 90, 38, 0.45);
+  --callout-glow: 0 0 20px rgba(255, 90, 38, 0.18);
+  --toggle-bg: rgba(90, 96, 104, 0.5);
+  --label-halo: 0 2px 10px rgba(28, 29, 32, 0.95);
+  --scan-line: rgba(241, 230, 207, 0.02);
   --scan-blend: overlay;
-  --h1-glow: drop-shadow(0 0 24px rgba(107, 142, 111, 0.3));
-  --stat-glow: 0 0 16px rgba(107, 142, 111, 0.4);
-  --shield-glow: drop-shadow(0 0 9px rgba(107, 142, 111, 0.55));
-  --tick-glow: 0 0 9px rgba(107, 142, 111, 0.75);
-  --sel-bg: rgba(221, 141, 101, 0.35);
-  --sel-ink: #eae5e0;
-  --scrollbar: rgba(107, 142, 111, 0.45);
+  --h1-glow: drop-shadow(0 0 24px rgba(255, 90, 38, 0.28));
+  --stat-glow: 0 0 16px rgba(255, 90, 38, 0.35);
+  --shield-glow: drop-shadow(0 0 9px rgba(255, 90, 38, 0.5));
+  --tick-glow: 0 0 9px rgba(255, 90, 38, 0.7);
+  --sel-bg: rgba(255, 90, 38, 0.85);
+  --sel-ink: #1c1d20;
+  --scrollbar: rgba(241, 230, 207, 0.4);
 }
 
 /* No backdrop-filter (old engines): the frost does the legibility work, so
-   without it the glass fills harden to near-opaque — text never floats on
-   raw scene. The rim/flare dressing still renders. */
+   without it the glass fills harden to the EXACT brand solids the contrast
+   audit was run against. The rim/flare dressing still renders. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root {
-    --tile-bg: rgba(255, 255, 255, 0.93);
-    --callout-bg: rgba(255, 255, 255, 0.96);
-    --toggle-bg: rgba(255, 255, 255, 0.92);
-    --panel-grad-inline: linear-gradient(to left, rgba(255, 255, 255, 0.97), rgba(255, 255, 255, 0.88));
-    --panel-grad-block: linear-gradient(to bottom, rgba(255, 255, 255, 0.97), rgba(255, 255, 255, 0.88));
+    --tile-bg: rgba(47, 74, 59, 0.97);
+    --callout-bg: rgba(47, 74, 59, 0.98);
+    --toggle-bg: rgba(47, 74, 59, 0.96);
+    --panel-grad-inline: linear-gradient(to left, rgba(47, 74, 59, 0.98), rgba(47, 74, 59, 0.94));
+    --panel-grad-block: linear-gradient(to bottom, rgba(47, 74, 59, 0.98), rgba(47, 74, 59, 0.94));
   }
   :root[data-theme="dark"] {
-    --tile-bg: rgba(42, 36, 32, 0.92);
-    --callout-bg: rgba(42, 36, 32, 0.95);
-    --toggle-bg: rgba(42, 36, 32, 0.9);
-    --panel-grad-inline: linear-gradient(to left, rgba(42, 36, 32, 0.96), rgba(42, 36, 32, 0.86));
-    --panel-grad-block: linear-gradient(to bottom, rgba(42, 36, 32, 0.96), rgba(42, 36, 32, 0.86));
+    --tile-bg: rgba(90, 96, 104, 0.95);
+    --callout-bg: rgba(90, 96, 104, 0.97);
+    --toggle-bg: rgba(90, 96, 104, 0.94);
+    --panel-grad-inline: linear-gradient(to left, rgba(90, 96, 104, 0.97), rgba(90, 96, 104, 0.9));
+    --panel-grad-block: linear-gradient(to bottom, rgba(90, 96, 104, 0.97), rgba(90, 96, 104, 0.9));
   }
+}
+
+/* ── Surface scope ──────────────────────────────────────────────────────
+   Everything that paints a brand surface (green glass in light, gray
+   glass in dark) rebinds the CONTEXTUAL slots so all type, tags, links,
+   hairlines, focus rings and frames inside flip to the on-surface family
+   — component recipes below never need to know which ground they're on. */
+.hero-block,
+.copy-block,
+.glass-card,
+.site-nav,
+.callout,
+.faq,
+.stat,
+.contact-item,
+.seg,
+.spec-row,
+.gl-hint,
+.theme-toggle,
+.lang-toggle {
+  --ink: var(--text-on-surface);
+  --heading: var(--text-on-surface);
+  --dim: var(--muted-on-surface);
+  --faint: var(--muted-on-surface);
+  --cta: var(--link-on-surface);
+  --emerald-bright: var(--tag-on-surface);
+  --ice: var(--tag-on-surface);
+  --signal: var(--signal-on-surface);
+  --line: var(--line-on-surface);
+  --border: var(--border-on-surface);
+  --err: var(--err-on-surface);
+  --focus: var(--focus-on-surface);
+  --accent-rgb: var(--frame-rgb-on-surface);
+  --scrollbar: var(--scrollbar-on-surface);
 }
 
 * {
@@ -189,10 +373,20 @@ html[data-theme="dark"] {
 body {
   background: var(--bg);
   color: var(--ink);
-  font-family: "IBM Plex Sans Arabic", Tahoma, system-ui, sans-serif;
+  font-family: var(--font-body);
+  line-height: var(--lh-body);
   overflow-x: clip;
   -webkit-tap-highlight-color: transparent;
   transition: background-color 0.35s ease, color 0.35s ease;
+}
+
+/* Links: text in the context's AA color, the underline is the orange
+   brand stroke (underlines are shapes — exempt from the text ratio). */
+a {
+  color: var(--cta);
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
 }
 
 ::selection {
@@ -359,7 +553,7 @@ main summary,
 }
 .nav-link.active .nav-tag { color: var(--emerald-bright); }
 .nav-link:focus-visible {
-  outline: 2px solid var(--cta);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -384,7 +578,7 @@ main summary,
   cursor: pointer;
 }
 .gl-hint:focus-visible {
-  outline: 2px solid var(--cta);
+  outline: 2px solid var(--focus);
   outline-offset: 3px;
 }
 
@@ -423,7 +617,7 @@ main summary,
 }
 .theme-toggle:focus-visible,
 .lang-toggle:focus-visible {
-  outline: 2px solid var(--cta);
+  outline: 2px solid var(--focus);
   outline-offset: 3px;
 }
 .theme-toggle .icon {
@@ -661,9 +855,10 @@ main summary,
 h1 {
   margin-top: 26px;
   font-size: clamp(34px, 4.6vw, 64px);
-  line-height: 1.12;
+  line-height: 1.3; /* Arabic display needs air for marks & joins */
   font-weight: 700;
-  letter-spacing: -0.01em;
+  /* NO letter-spacing here: tracking breaks Arabic letter joining —
+     the Latin ramp applies its own inside html[lang="en"]. */
   display: grid;
   color: var(--heading);
 }
@@ -830,7 +1025,7 @@ h2 {
   filter: brightness(1.05);
 }
 .btn:focus-visible {
-  outline: 2px solid var(--cta);
+  outline: 2px solid var(--focus);
   outline-offset: 3px;
 }
 
@@ -978,7 +1173,7 @@ h2 {
   border-inline-start: 3px solid var(--signal);
 }
 .seg-btn:focus-visible {
-  outline: 2px solid var(--cta);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -1069,7 +1264,7 @@ h2 {
 }
 .faq[open] summary::after { rotate: 45deg; }
 .faq summary:focus-visible {
-  outline: 2px solid var(--cta);
+  outline: 2px solid var(--focus);
   outline-offset: -2px;
 }
 .faq p {
@@ -1105,7 +1300,7 @@ h2 {
 .field textarea {
   width: 100%;
   padding: 11px 13px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border); /* functional edge: ≥3:1 in both themes */
   border-radius: 12px;
   background: var(--tile-bg);
   color: var(--ink);
@@ -1224,7 +1419,7 @@ h2 {
   border: 1px solid var(--line);
   box-shadow: var(--tile-shadow);
   overflow: hidden;
-  color: #f4f8fa;
+  color: var(--on-photo);
   transition: border-color 0.3s ease, transform 0.3s ease;
 }
 .domain-photo {
@@ -1241,28 +1436,28 @@ h2 {
 .domain-scrim {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgba(2, 10, 17, 0.93), rgba(2, 10, 17, 0.35));
+  background: linear-gradient(to top, var(--photo-scrim-a), var(--photo-scrim-b));
 }
 .domain > :not(.domain-scrim):not(.domain-photo) { position: relative; }
 .domain-count {
   font-size: 11px;
-  color: #3fd98b;
+  color: var(--photo-accent);
 }
-.domain-name { font-size: 19px; font-weight: 700; }
-.domain-en { font-size: 9px; color: rgba(222, 236, 242, 0.8); }
+.domain-name { font-size: 19px; font-weight: 700; color: var(--on-photo); }
+.domain-en { font-size: 9px; color: var(--on-photo-dim); }
 .domain-list {
   list-style: none;
   display: grid;
   gap: 3px;
   margin-top: 7px;
   padding-top: 7px;
-  border-top: 1px solid rgba(222, 236, 242, 0.25);
+  border-top: 1px solid rgba(241, 230, 207, 0.25);
   font-size: 11px;
-  color: rgba(222, 236, 242, 0.88);
+  color: var(--on-photo-dim);
 }
 .domain-list li::before {
   content: "·";
-  color: #3fd98b;
+  color: var(--photo-accent);
   font-weight: 700;
   margin-inline-end: 6px;
 }
@@ -1333,7 +1528,7 @@ h2 {
 }
 
 a:focus-visible {
-  outline: 2px solid var(--cta);
+  outline: 2px solid var(--focus);
   outline-offset: 3px;
 }
 

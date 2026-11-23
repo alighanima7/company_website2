@@ -114,13 +114,13 @@ export function CityScape3D(): JSX.Element {
       base: new THREE.MeshStandardMaterial({ color: P.cityBase, metalness: 0.15, roughness: 0.7 }),
       tower: new THREE.MeshStandardMaterial({ color: P.cityTower, metalness: 0.2, roughness: 0.55, flatShading: true }),
       windowA: new THREE.MeshStandardMaterial({
-        color: "#13301d",
+        color: P.cityGlassA,
         emissive: P.cityWindowA,
         emissiveIntensity: P.emissiveEmerald * 0.8,
         roughness: 0.45,
       }),
       windowB: new THREE.MeshStandardMaterial({
-        color: "#301d13",
+        color: P.cityGlassB,
         emissive: P.cityWindowB,
         emissiveIntensity: P.emissiveIce * 0.8,
         roughness: 0.45,

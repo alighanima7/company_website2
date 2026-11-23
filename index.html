@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#f3c3c8" />
+    <meta name="theme-color" content="#F1E6CF" />
     <script>
       /* Theme bootstrap — same contract as production: LIGHT is the CSS base
          and the default; DARK is stamped pre-paint only for a returning
@@ -18,7 +18,7 @@
           if (t === "dark") {
             document.documentElement.setAttribute("data-theme", "dark");
             var meta = document.querySelector('meta[name="theme-color"]');
-            if (meta) meta.setAttribute("content", "#1e1a17");
+            if (meta) meta.setAttribute("content", "#1C1D20");
           }
           /* Locale: ARABIC (rtl) is the default; a stored English choice
              flips lang/dir pre-paint so there is no direction flash. */
@@ -58,11 +58,22 @@
     <meta property="og:locale:alternate" content="en_US" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/og.jpg" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Self-hosted IBM Plex (woff2, subset per script) — @font-face lives
+         in styles.css. Preload only the default locale's critical pair;
+         Latin/mono and the 600s arrive on demand via unicode-range. -->
     <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+      rel="preload"
+      href="/fonts/ibm-plex-sans-arabic-arabic-400-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/ibm-plex-sans-arabic-arabic-700-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
     />
   </head>
   <body>

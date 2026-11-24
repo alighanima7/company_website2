@@ -343,7 +343,8 @@ html[lang="en"] {
 .faq,
 .stat,
 .contact-item,
-.seg,
+.product-card,
+.product-rail,
 .spec-row,
 .gl-hint,
 .theme-toggle,
@@ -406,6 +407,19 @@ a {
   font-family: var(--mono);
   letter-spacing: 0.16em;
   direction: ltr;
+}
+
+/* Available to assistive tech, invisible on screen. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ── Layers ─────────────────────────────────────────────────────────────
@@ -833,13 +847,115 @@ main summary,
   align-items: flex-end;
   padding: 40px 4vw 14svh;
 }
-/* The landing panel may never climb under the fixed nav on short
-   viewports — tall copy scrolls inside the glass instead. */
+/* ── Act 2 landing panel: fits its viewport, never scrolls inside ──────
+   The panel used to be capped at a slice of the viewport HEIGHT while
+   its contents were sized almost entirely in viewport WIDTH units — two
+   unrelated axes, so a short-but-wide window clipped the bottom cards
+   behind an inner scrollbar. Now nothing is capped: the block is always
+   as tall as its content, and the content is what shrinks, sized off
+   BOTH axes (vw for line length, svh for the vertical budget).
+
+   The leading is where the height actually was. Everything inside
+   inherits the Arabic body ride-height (1.85), which wrapped a 38px
+   figure in a 70px line box — roughly 55px of pure air per card.
+   Tightening the line boxes alone pays for the fit, so the type stays
+   large and the two smallest labels move UP to the legibility floor
+   (11px mono / 14px body) instead of down.
+
+   Scoped to .home-map on purpose: .copy-block is shared with the
+   Products panel and .stats/.stat with the Requests figures. */
+
 .home-map .copy-block {
-  max-height: calc(100svh - 170px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
+  padding: clamp(20px, 2.8svh, 32px) clamp(20px, 2vw, 34px);
+}
+
+.home-map .copy-block .kicker {
+  font-size: 11px; /* small-mono floor (was 10.5px) */
+  line-height: 1.3;
+}
+
+.home-map .copy-block h2 {
+  margin-top: clamp(8px, 1.6svh, 16px);
+  font-size: clamp(26px, 1.8vw + 1.6svh, 40px);
+  line-height: 1.2;
+}
+html[lang="en"] .home-map .copy-block h2 {
+  font-size: clamp(22px, 1.5vw + 1.3svh, 34px);
+  line-height: 1.12;
+}
+
+.home-map .copy-block .lead {
+  margin-top: clamp(8px, 1.6svh, 16px);
+  font-size: clamp(14.5px, 0.6vw + 0.6svh, 17px);
+  /* Arabic down from 1.95 — still clear of the marks and descenders. */
+  line-height: 1.6;
+}
+html[lang="en"] .home-map .copy-block .lead {
+  line-height: 1.5;
+}
+
+/* A stable 2×2 at every width. The old auto-fit track landed on THREE
+   columns at 1920/1366 (a 3+1 orphan row — the tallest arrangement the
+   four cards can take) and on ONE column at 768 (a four-card tower),
+   and flipped between them whenever the inner scrollbar changed the
+   content width by its own 11px. */
+.home-map .copy-block .stats {
+  margin-top: clamp(14px, 2.8svh, 30px);
+  grid-template-columns: repeat(2, 1fr);
+  gap: clamp(8px, 1.1svh, 12px);
+}
+
+.home-map .copy-block .stat {
+  gap: 2px;
+  padding: clamp(10px, 1.6svh, 16px) 10px;
+}
+.home-map .copy-block .stat-value {
+  font-size: clamp(24px, 1vw + 1.3svh, 28px);
+  line-height: 1.04;
+  /* dir="ltr" Latin digits — tracking is safe here (never on Arabic),
+     and easing it off 0.16em buys "5,000" the room to stay on one line. */
+  letter-spacing: 0.04em;
+}
+.home-map .copy-block .stat-ar {
+  font-size: 14px; /* body floor (was 13px) */
+  line-height: 1.3;
+}
+.home-map .copy-block .stat-en {
+  font-size: 11px; /* small-mono floor (was 8.5px) */
+  line-height: 1.25;
+  letter-spacing: 0.12em;
+}
+
+/* Very short viewports: the lead is the one element that can go without
+   losing a fact — heading and all four figures stay. Hidden, never
+   clipped, and the panel still does not scroll inside. The landing
+   block also docks closer to the section's bottom edge here, which is
+   what keeps its top clear of the nav rail once the viewport is this
+   short (the 14svh foot alone leaves it ~15px under the pill at 400px).
+   Section height is pinned by min-height, so the film track is
+   untouched by the smaller foot. */
+@media (max-height: 460px) {
+  .home-map { padding-bottom: 4svh; }
+  .home-map .copy-block .lead { display: none; }
+  /* The mono tag under each figure repeats in English what the localized
+     label above it already says — the one genuinely redundant element,
+     so it goes before any figure or the heading does. */
+  .home-map .copy-block .stat-en { display: none; }
+}
+
+/* 768–1023px at these heights is a landscape phone, and on that tier the
+   nav rail docks at 74px and eats a third of the viewport. Letting the
+   panel run wider there stops the heading and the card labels wrapping,
+   which buys back far more height than the narrow column costs. Kept off
+   the <768px tier, where the panel is already full-bleed. */
+@media (max-height: 460px) and (min-width: 768px) {
+  .home-map .copy-block { max-width: min(64vw, 720px); }
+}
+
+/* Landscape phones proper (~360–400px tall) — last of the air goes. */
+@media (max-height: 400px) {
+  .home-map .copy-block { padding: 12px clamp(16px, 2vw, 28px); }
+  .home-map .copy-block .stat { padding: 8px; }
 }
 
 .home-tail {
@@ -1139,26 +1255,29 @@ h2 {
   box-shadow: var(--tile-shadow);
 }
 
+/* The detail panel sizes to its content and the PAGE scrolls — it never
+   scrolls inside. The old cap (100svh − 170px + overflow-y:auto) hid
+   431–711px of every product behind an inner scrollbar, and because a
+   non-visible overflow on one axis forces the other from `visible` to
+   `auto`, a 1px rounding overflow also painted a 10.4px HORIZONTAL bar
+   across the bottom. Both bars are gone with the cap. */
 .product-panel {
-  max-height: calc(100svh - 170px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
+  padding: clamp(20px, 2.6svh, 32px) clamp(20px, 2vw, 34px);
 }
 
-/* Scroll-driven teardown (FMC devices): the page grows a runway and the
-   stage section pins — the fixed canvas behind plays the exploded view
-   across the travel. The track exists only while an FMC product is
-   active; under reduced motion ProductsPage renders neither track nor
-   cue and the device holds its assembled pose. */
+/* Scroll-driven teardown (FMC devices): the track wrapper grows a runway
+   and the stage section pins — the fixed canvas behind plays the exploded
+   view across the travel. Scoping `sticky` to .explode-track is what lets
+   the stage RELEASE at the end of the runway so the spec section below
+   scrolls over the page normally. The track exists only while an FMC
+   product is in detail view; under reduced motion ProductsPage renders
+   neither track nor cue and the device holds its assembled pose. */
+.explode-track {
+  position: relative;
+}
 .page-products-track .product-stage {
   position: sticky;
   top: 0;
-}
-.page-products-track .product-panel {
-  /* Wheel momentum must reach the page once the panel's own scroll ends —
-     the teardown stays drivable with the cursor anywhere. */
-  overscroll-behavior: auto;
 }
 /* Height comes from RUNWAY_SVH (src/productScroll.ts) as an inline style —
    this block only exists so reduced motion can collapse the track. */
@@ -1166,51 +1285,196 @@ h2 {
   height: 0;
 }
 
-.seg {
-  margin-top: 20px;
+/* ── Products · browse: one viewport-tall segment per product ─────────
+   The lineup reads as a sequence: each product owns a segment, the
+   persistent Stage canvas swaps to its showcase as that segment takes the
+   viewport midline, and the card is the only DOM in it. Native scroll
+   throughout — no scroll-snap, nothing that fights touch momentum. */
+
+.products-intro {
+  min-height: 70svh;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 5px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--tile-bg);
+  align-items: center;
+  padding: clamp(120px, 15svh, 170px) 4vw 40px;
 }
-.seg-btn {
-  flex: 1 1 auto;
-  padding: 9px 12px;
-  border: 1px solid transparent;
-  border-radius: 12px;
-  background: transparent;
-  color: var(--dim);
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: color 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+.intro-block {
+  padding: clamp(20px, 2.6svh, 32px) clamp(20px, 2vw, 34px);
 }
-.seg-btn:hover { color: var(--ink); }
-.seg-btn.active {
-  color: var(--ink);
-  background: var(--accent-soft-bg);
-  border-color: rgba(var(--cta-rgb), 0.55);
+
+.browse-seg {
+  position: relative;
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  padding: 110px 4vw 80px;
+}
+
+.product-card {
+  max-width: min(40vw, 480px);
+  padding: clamp(18px, 2.4svh, 28px) clamp(18px, 1.8vw, 30px);
+  display: grid;
+  gap: clamp(5px, 0.8svh, 9px);
+  transition: border-color 0.35s ease;
+}
+/* The active segment's card carries the same signal edge the spec rows
+   use, so "which product is the canvas showing" is answered in the DOM
+   as well as by the scene itself. */
+.product-card.is-active {
   border-inline-start: 3px solid var(--signal);
 }
-.seg-btn:focus-visible {
+.card-name {
+  font-size: clamp(21px, 1.4vw + 1.2svh, 32px);
+  line-height: 1.22;
+  font-weight: 700;
+  color: var(--heading);
+}
+.card-tag {
+  font-size: 11px;
+  color: var(--faint);
+  text-align: start;
+}
+.card-blurb {
+  font-size: clamp(14px, 0.5vw + 0.5svh, 15.5px);
+  line-height: 1.6;
+  color: var(--dim);
+}
+html[lang="en"] .card-blurb { line-height: 1.5; }
+.card-cta {
+  margin-top: clamp(4px, 1svh, 10px);
+  justify-self: start;
+}
+
+/* Ghost position marker at the segment's foot — decorative, the rail and
+   the card's own kicker carry this for assistive tech. */
+/* Sits opposite the card, in the corner the model does not occupy.
+   Physical offsets on purpose: .mono forces `direction: ltr`, so logical
+   insets here would resolve against the ELEMENT's direction and pin the
+   marker to the same side in both locales. */
+.seg-count {
+  position: absolute;
+  bottom: clamp(26px, 6svh, 64px);
+  right: 4vw;
+  font-size: clamp(28px, 4vw, 54px);
+  font-weight: 600;
+  color: var(--faint);
+  opacity: 0.3;
+  pointer-events: none;
+}
+html[dir="rtl"] .seg-count {
+  right: auto;
+  left: 4vw;
+}
+.seg-count-total {
+  font-size: 0.42em;
+  opacity: 0.8;
+}
+
+/* Position indicator + jump links. Numbers always; the name expands on
+   hover/focus so the rail never covers the model at rest. */
+.product-rail {
+  position: fixed;
+  inset-inline-end: clamp(8px, 1.2vw, 20px);
+  top: 50%;
+  translate: 0 -50%;
+  z-index: 24;
+  display: grid;
+  gap: 5px;
+  pointer-events: auto;
+}
+.rail-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 9px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  color: var(--faint);
+  text-decoration: none;
+  transition: color 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+}
+.rail-num { font-size: 11px; }
+.rail-name {
+  font-size: 12.5px;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 0;
+  transition: max-width 0.35s ease, opacity 0.35s ease;
+}
+.rail-item:hover,
+.rail-item:focus-visible { color: var(--ink); }
+.rail-item:hover .rail-name,
+.rail-item:focus-visible .rail-name {
+  max-width: 44vw;
+  opacity: 1;
+}
+.rail-item[aria-current="true"] {
+  color: var(--ink);
+  background: var(--tile-bg);
+  border-color: rgba(var(--cta-rgb), 0.55);
+  -webkit-backdrop-filter: var(--tile-backdrop);
+  backdrop-filter: var(--tile-backdrop);
+}
+.rail-item[aria-current="true"] .rail-num { color: var(--emerald-bright); }
+.rail-item:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
-.product-info { margin-top: 22px; }
-.product-name {
-  margin-top: 6px;
-  font-size: clamp(21px, 2.4vw, 30px);
+/* ── Products · detail: one product on its own ────────────────────────── */
+
+.back-link {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--cta);
+  text-decoration: none;
+}
+.back-link:hover { text-decoration: underline; }
+.back-link:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+/* The glyph is directional: mirror it rather than shipping two strings. */
+html[dir="rtl"] .back-arrow { scale: -1 1; }
+
+.detail-name {
+  margin-top: 10px;
+  font-size: clamp(22px, 1.5vw + 1.3svh, 34px);
+  line-height: 1.2;
   font-weight: 700;
   color: var(--heading);
 }
+/* Opening the view moves focus here so the product name is announced.
+   The heading is a screen-reader landing point, not something you can
+   act on, so it never paints a ring — Chrome otherwise matches
+   :focus-visible on a programmatically focused tabindex="-1" element and
+   a mouse click would leave a box around the title. */
+.detail-name:focus,
+.detail-name:focus-visible {
+  outline: none;
+}
+
+/* The teardown's spec table, after the runway. A readable centred column:
+   by this point the device is fully exploded behind, and the specs are
+   the thing being read. */
+.detail-specs {
+  padding: clamp(30px, 8svh, 90px) 4vw clamp(30px, 6svh, 70px);
+}
+.specs-block {
+  max-width: min(92vw, 680px);
+  margin-inline: auto;
+  padding: clamp(20px, 2.6svh, 32px) clamp(20px, 2vw, 34px);
+  display: grid;
+  gap: 0;
+}
+
 .product-tag {
   margin-top: 4px;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--faint);
   text-align: start;
 }
@@ -1238,16 +1502,28 @@ h2 {
   border-radius: 12px;
   background: var(--tile-bg);
 }
+/* Floors: 11px for small mono, 14px for body. These three sat at 9.5 /
+   12.5 / 8.5 — the detail view is where the specs are actually read, so
+   they come up to the floor rather than down. */
 .spec-tag {
-  font-size: 9.5px;
-  letter-spacing: 0.2em;
+  font-size: 11px;
+  letter-spacing: 0.16em;
   color: var(--emerald-bright);
   text-align: start;
 }
-.spec-desc { font-size: 12.5px; line-height: 1.6; }
+/* Must name its own colour: .spec-row rebinds --ink for the surface but
+   declares no `color`, so without this the description inherits the PAGE
+   ink — which in the light theme is the same teal as the row's own
+   background, rendering the text invisible. */
+.spec-desc {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+html[lang="en"] .spec-desc { line-height: 1.5; }
 .spec-spec {
-  font-size: 8.5px;
-  letter-spacing: 0.14em;
+  font-size: 11px;
+  letter-spacing: 0.12em;
   color: var(--faint);
   text-align: start;
 }
@@ -1571,7 +1847,7 @@ a:focus-visible {
   .contact-item,
   .nav-link,
   .btn,
-  .seg-btn,
+  .rail-item,
   .faq summary {
     touch-action: manipulation;
   }
@@ -1595,9 +1871,12 @@ a:focus-visible {
   .home-hero,
   .product-stage { padding-top: 150px; }
   .page-doc { padding-top: 170px; }
-  /* The nav rail sits lower on this tier — the landing panel's cap must
-     reserve that extra headroom on short landscape tablets. */
-  .home-map .copy-block { max-height: calc(100svh - 215px); }
+  /* The nav rail docks at 74px on this tier — browse segments must clear
+     it, and 40vw is too narrow a card to read at this width. */
+  .browse-seg { padding-top: 160px; }
+  .products-intro { padding-top: 170px; }
+  .product-card { max-width: min(56vw, 440px); }
+  .rail-name { font-size: 12px; }
 }
 
 /* ── sm: phones (<768px) — stacked zoning + bottom tab bar ────────────── */
@@ -1669,13 +1948,8 @@ a:focus-visible {
     padding: 24px 16px calc(120px + env(safe-area-inset-bottom));
   }
   /* Act 2 stacked split: the sheet stays in the lower half so the staged
-     map keeps the band above it (scrolls inside if the copy runs tall). */
-  .home-map .copy-block {
-    max-height: 48svh;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-width: thin;
-  }
+     map keeps the band above it. It needs no cap here — the tightened
+     panel now measures well under half the viewport on its own. */
   .copy-block,
   .glass-card {
     max-width: 100%;
@@ -1688,9 +1962,40 @@ a:focus-visible {
     align-items: flex-end;
     padding: 76px 16px 96px;
   }
-  .product-panel {
-    max-height: 52svh;
+
+  /* Browse on phones: the 3D composition owns the upper half (the Stage's
+     mobile rig already tilts the scene up there), the card docks low and
+     clears the bottom tab bar. The rail would collide with that bar, so
+     it goes — the card's own 01–05 kicker carries the position. */
+  .products-intro {
+    min-height: 56svh;
+    align-items: flex-end;
+    padding: 108px 16px 24px;
   }
+  .browse-seg {
+    align-items: flex-end;
+    padding: 46svh 16px calc(104px + env(safe-area-inset-bottom));
+  }
+  .product-card {
+    max-width: 100%;
+    width: 100%;
+    padding: 16px 16px 18px;
+    border-radius: 18px;
+  }
+  .card-name { font-size: clamp(20px, 5.6vw, 26px); }
+  .card-blurb { font-size: 14px; }
+  .product-rail { display: none; }
+  /* Full-width cards leave no free corner, and the card's own 01–05
+     kicker already states the position. */
+  .seg-count { display: none; }
+
+  .detail-specs { padding: 28px 16px calc(96px + env(safe-area-inset-bottom)); }
+  .specs-block {
+    max-width: 100%;
+    padding: 18px 16px 20px;
+    border-radius: 18px;
+  }
+
   .product-fallback {
     inset-inline-end: auto;
     inset-inline: 0;
@@ -1760,5 +2065,13 @@ a:focus-visible {
   .lang-toggle,
   .theme-toggle .icon,
   .btn,
-  .nav-link { transition: none; }
+  .nav-link,
+  .product-card,
+  .rail-item,
+  .rail-name { transition: none; }
+  /* The rail's name is revealed by a width transition; with transitions
+     off it must still open on hover/focus rather than snapping from a
+     zero-width box mid-interaction. */
+  .rail-item:hover .rail-name,
+  .rail-item:focus-visible .rail-name { max-width: 44vw; opacity: 1; }
 }

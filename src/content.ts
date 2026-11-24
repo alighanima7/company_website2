@@ -561,6 +561,10 @@ export const PRODUCTS_PAGE = {
   },
   switchLabel: { ar: "اختيار المنتج", en: "Select product" },
   specsTitle: { ar: "المواصفات", en: "Specifications" },
+  /** Browse → detail, and the way back. UI chrome for the two new
+   *  controls; no product copy is implied by either. */
+  detailsCta: { ar: "عرض التفاصيل", en: "View details" },
+  backCta: { ar: "العودة إلى المنتجات", en: "Back to products" },
   /** Scroll invitation + a11y name for the FMC exploded-view track. */
   explodeCue: { ar: "مرّر لتفكيك الجهاز — والعودة تعيد تجميعه", en: "Scroll to take it apart — scroll back to reassemble" },
   viewerLabel: { ar: "عرض ثلاثي الأبعاد تفاعلي يتفكك مع التمرير", en: "Interactive 3D exploded view driven by scroll" },

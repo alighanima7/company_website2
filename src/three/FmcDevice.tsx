@@ -115,12 +115,12 @@ const CONFIGS: Record<FmcId, FmcConfig> = {
   },
 };
 
-/** Warm both GLBs — called by ProductsPage on mount, so the fetch starts
- *  when the lineup appears rather than at app load (they're the heaviest
- *  assets in the project). Draco OFF (CDN decoder), meshopt ON (bundled). */
-export function preloadFmcModels(): void {
-  useGLTF.preload(CONFIGS.fmc130.url, false, true);
-  useGLTF.preload(CONFIGS.fmc920.url, false, true);
+/** Warm ONE GLB — the browse sequence calls this as a device's segment
+ *  approaches, so the 3.0MB/1.7MB fetches are spread across the scroll
+ *  instead of landing together on page entry. Draco OFF (CDN decoder),
+ *  meshopt ON (bundled). */
+export function preloadFmc(id: FmcId): void {
+  useGLTF.preload(CONFIGS[id].url, false, true);
 }
 
 /** Node-name key: three's GLTFLoader sanitizes "root.0.refined" into

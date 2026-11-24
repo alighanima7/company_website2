@@ -7,7 +7,17 @@ import { useSyncExternalStore } from "react";
  * nothing, so the DOM side and the canvas side stay decoupled.
  */
 
-export type ProductId = "tracker" | "collar" | "city" | "fmc130" | "fmc920";
+/** The lineup's order — also the browse sequence and the router's set of
+ *  valid `#/products/<id>` segments. One source of truth; still imports
+ *  nothing, so the router may depend on it without creating a cycle. */
+export const PRODUCT_IDS = ["tracker", "collar", "city", "fmc130", "fmc920"] as const;
+
+export type ProductId = (typeof PRODUCT_IDS)[number];
+
+/** Narrows a raw URL segment. Anything else is not a product. */
+export function isProductId(value: string): value is ProductId {
+  return (PRODUCT_IDS as readonly string[]).includes(value);
+}
 
 const listeners = new Set<() => void>();
 

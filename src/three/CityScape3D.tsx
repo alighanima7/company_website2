@@ -8,6 +8,7 @@ import type { Line2, LineSegments2 } from "three-stdlib";
 import { CITY_CALLOUTS } from "../content";
 import { useLocale } from "../locale";
 import { clamp01, lerp, motionState, phase } from "../motion";
+import { BROWSE_PEAK, dampProductScroll, productScroll } from "../productScroll";
 import { useIsMobile } from "../responsive";
 import { SCENE, useTheme } from "../theme";
 
@@ -20,12 +21,23 @@ import { SCENE, useTheme } from "../theme";
  * all wired to a central IoT hub by dashed data pulses, under a slowly
  * turning management ring.
  *
- * Products-page showcase: rises on mount, spins slowly forever, streams
- * its data pulses, and reveals each pillar's bilingual callout in a
- * one-at-a-time loop. Reduced motion holds the lit district still.
+ * Two modes, decided by whether a scroll driver is attached:
+ *  · BROWSE — scrubbed by the segment track. The district ASSEMBLES out
+ *    of its platform (towers → lamps → parking → bins, each on its own
+ *    staggered window), the ring spins up, the pulses start streaming and
+ *    each pillar's callout opens as that pillar finishes rising — then it
+ *    all settles back down, so the scene swap lands on a clean state.
+ *  · DETAIL — no runway exists for this product, so it stands fully built
+ *    and runs the original clock spin + callout carousel.
+ *
+ * Reduced motion holds the lit district still and fully built.
  */
 
 const PLATFORM_R = 2.3;
+
+/** Browse yaw sweep at the peak, radians (~69°). Bounded so the district
+ *  returns to the same orientation at both ends of the segment. */
+const SCRUB_SWEEP = 1.2;
 
 /** Callout carousel period (seconds) — four pillars per revolution. */
 const CYCLE = 16;
@@ -97,6 +109,12 @@ const CALLOUT_ANCHORS: Record<string, readonly [number, number, number]> = {
 export function CityScape3D(): JSX.Element {
   const root = useRef<THREE.Group>(null);
   const spinner = useRef<THREE.Group>(null);
+  /* Pillar families, each wrapped at y=0 so scaling Y grows them straight
+     out of the platform with their bases planted. */
+  const towersRef = useRef<THREE.Group>(null);
+  const lampsRef = useRef<THREE.Group>(null);
+  const parkRef = useRef<THREE.Group>(null);
+  const binsRef = useRef<THREE.Group>(null);
   const ringRef = useRef<THREE.Mesh>(null);
   const pulseRefs = useRef<Array<Line2 | LineSegments2 | null>>([]);
   const labelRefs = useRef<Array<HTMLDivElement | null>>([]);
@@ -158,45 +176,80 @@ export function CityScape3D(): JSX.Element {
       setCalloutsLive(live);
     }
 
+    // Browse scrubs this scene; detail mode (no runway for this product)
+    // leaves it on the clock, fully built. Normalized because browse caps
+    // at BROWSE_PEAK and that is the only scroll range this scene sees.
+    const scrub = productScroll.driven && !reduced;
+    const s = scrub ? clamp01(dampProductScroll(dt) / BROWSE_PEAK) : 0;
+
+    /* The district ASSEMBLES: each pillar family grows out of the platform
+       on its own staggered window, so the quarter builds itself tower →
+       lamps → parking → bins and settles back down by the segment's end.
+       Every one of these is a real mesh family in this scene — nothing is
+       faked to create the effect. Unscrubbed, everything stands at 1. */
+    const build = (a: number, b: number): number => (scrub ? Math.max(0.001, phase(s, a, b)) : 1);
+    const rise: ReadonlyArray<[{ current: THREE.Group | null }, number]> = [
+      [towersRef, build(0.05, 0.45)],
+      [lampsRef, build(0.18, 0.58)],
+      [parkRef, build(0.3, 0.7)],
+      [binsRef, build(0.42, 0.82)],
+    ];
+    rise.forEach(([ref, k]) => {
+      const node = ref.current;
+      if (node !== null) node.scale.y = k;
+    });
+
     const g = root.current;
     if (g !== null) {
       g.visible = true;
       g.scale.setScalar(Math.max(0.001, enter));
       g.position.set(0, lerp(-2.6, -0.35, enter), 0);
     }
-    const s = spinner.current;
-    if (s !== null) {
-      s.rotation.y = reduced ? t * 0.03 : t * 0.08;
+    const sp = spinner.current;
+    if (sp !== null) {
+      // Scrubbed: a bounded sweep that returns square at both ends, so the
+      // scene swap always lands on the same orientation. Otherwise the
+      // slow presentation spin. Reduced motion now holds still.
+      sp.rotation.y = scrub ? SCRUB_SWEEP * s : reduced ? 0 : t * 0.08;
     }
 
-    // Management ring: slow counter-rotation + gentle breathing.
+    // Management ring: spins up with the build, then breathes.
     const ring = ringRef.current;
     if (ring !== null) {
-      if (!reduced) ring.rotation.z = -t * 0.18;
+      if (!reduced) ring.rotation.z = scrub ? -s * 2.4 : -t * 0.18;
       const m = ring.material as THREE.MeshBasicMaterial;
-      m.opacity = 0.5 * enter * (reduced ? 0.75 : 0.75 + 0.25 * Math.sin(t * 1.4));
+      const ringIn = scrub ? phase(s, 0.1, 0.5) : 1;
+      m.opacity = 0.5 * enter * ringIn * (reduced ? 0.75 : 0.75 + 0.25 * Math.sin(t * 1.4));
     }
 
     // Data pulses stream hub→pillars once the district is up.
     pulseRefs.current.forEach((line, i) => {
       const material = line?.material;
       if (material !== undefined) {
-        material.opacity = clamp01(phase(enter, 0.6, 1) * 1.2 - i * 0.05);
-        if (!reduced) material.dashOffset = -t * 0.5 - i * 0.2;
+        const up = scrub ? phase(s, 0.35, 0.75) : 1;
+        material.opacity = clamp01((phase(enter, 0.6, 1) * 1.2 - i * 0.05) * up);
+        if (!reduced) material.dashOffset = scrub ? -s * 6 - i * 0.2 : -t * 0.5 - i * 0.2;
       }
     });
 
-    // Callouts reveal ONE AT A TIME on a loop — each chip's window closes
-    // before the next opens, so card-to-card stacking is impossible
-    // through the district's continuous spin.
-    const cyc = reduced || !live ? -1 : (t % CYCLE) / CYCLE;
+    // Callouts reveal ONE AT A TIME — scrubbed, each pillar's chip opens
+    // as that pillar finishes rising and closes before the next, so they
+    // can never stack. Otherwise the clock carousel, as before.
+    const cyc = scrub ? s : reduced || !live ? -1 : (t % CYCLE) / CYCLE;
     CITY_CALLOUTS.forEach((_, i) => {
       const el = labelRefs.current[i];
       if (el === null || el === undefined) return;
-      const o =
-        cyc < 0
-          ? 0
-          : phase(cyc, 0.04 + i * 0.24, 0.1 + i * 0.24) * (1 - phase(cyc, 0.2 + i * 0.24, 0.24 + i * 0.24));
+      let o: number;
+      if (scrub) {
+        const a = 0.2 + i * 0.17;
+        o = live ? phase(s, a, a + 0.07) * (1 - phase(s, a + 0.13, a + 0.2)) : 0;
+      } else {
+        o =
+          cyc < 0
+            ? 0
+            : phase(cyc, 0.04 + i * 0.24, 0.1 + i * 0.24) *
+              (1 - phase(cyc, 0.2 + i * 0.24, 0.24 + i * 0.24));
+      }
       el.style.opacity = String(o);
       el.style.transform = `translateY(${String((1 - o) * 8)}px)`;
     });
@@ -273,6 +326,7 @@ export function CityScape3D(): JSX.Element {
         ))}
 
         {/* ── Pillar 1 · Smart Building: tower cluster (+x) ── */}
+        <group ref={towersRef}>
         {TOWERS.map(([x, z, w, h], i) => (
           <group key={i} position={[x, h / 2, z]}>
             <RoundedBox args={[w, h, w]} radius={0.02} smoothness={2} material={mats.tower} />
@@ -285,9 +339,11 @@ export function CityScape3D(): JSX.Element {
             </mesh>
           </group>
         ))}
+        </group>
         {calloutsLive && calloutFor("building")}
 
         {/* ── Pillar 2 · Smart Parking: lot + occupancy dots (−x, +z) ── */}
+        <group ref={parkRef}>
         <mesh position={[-1.23, 0.015, 0.78]} material={mats.dark}>
           <boxGeometry args={[1.1, 0.03, 0.75]} />
         </mesh>
@@ -301,9 +357,11 @@ export function CityScape3D(): JSX.Element {
             </mesh>
           </group>
         ))}
+        </group>
         {calloutsLive && calloutFor("parking")}
 
         {/* ── Pillar 3 · Smart Street Lighting: lamp arc (−z) ── */}
+        <group ref={lampsRef}>
         {LAMP_ANGLES.map((a) => {
           const x = 1.55 * Math.cos(a);
           const z = 1.55 * Math.sin(a) * 0.9;
@@ -318,9 +376,11 @@ export function CityScape3D(): JSX.Element {
             </group>
           );
         })}
+        </group>
         {calloutsLive && calloutFor("lighting")}
 
         {/* ── Pillar 4 · Waste + Metering (−x, −z) ── */}
+        <group ref={binsRef}>
         {BINS.map(([x, z], i) => (
           <group key={i} position={[x, 0.14, z]}>
             <mesh material={mats.dark}>
@@ -332,6 +392,7 @@ export function CityScape3D(): JSX.Element {
             </mesh>
           </group>
         ))}
+        </group>
         {/* smart meter box + inspection chamber cover */}
         <RoundedBox args={[0.18, 0.26, 0.1]} radius={0.02} smoothness={2} material={mats.tower} position={[-0.72, 0.13, -1.05]} />
         <mesh position={[-0.72, 0.21, -0.99]} material={mats.windowA}>

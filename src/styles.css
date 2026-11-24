@@ -1301,8 +1301,18 @@ h2 {
   padding: clamp(20px, 2.6svh, 32px) clamp(20px, 2vw, 34px);
 }
 
+/* A browse segment is a TRACK: taller than the viewport, with the stage
+   pinned inside it. The card holds still while the track scrolls past and
+   the model animates across `--track − 100svh` of travel. `--track` is an
+   inline per-product value (productScroll.BROWSE_TRACK_SVH); the fallback
+   keeps the layout sane if it is ever missing. */
 .browse-seg {
   position: relative;
+  min-height: var(--track, 100svh);
+}
+.browse-stage {
+  position: sticky;
+  top: 0;
   min-height: 100svh;
   display: flex;
   align-items: center;
@@ -1873,7 +1883,7 @@ a:focus-visible {
   .page-doc { padding-top: 170px; }
   /* The nav rail docks at 74px on this tier — browse segments must clear
      it, and 40vw is too narrow a card to read at this width. */
-  .browse-seg { padding-top: 160px; }
+  .browse-stage { padding-top: 160px; }
   .products-intro { padding-top: 170px; }
   .product-card { max-width: min(56vw, 440px); }
   .rail-name { font-size: 12px; }
@@ -1972,7 +1982,7 @@ a:focus-visible {
     align-items: flex-end;
     padding: 108px 16px 24px;
   }
-  .browse-seg {
+  .browse-stage {
     align-items: flex-end;
     padding: 46svh 16px calc(104px + env(safe-area-inset-bottom));
   }
@@ -2058,6 +2068,12 @@ a:focus-visible {
   /* A live OS toggle collapses the explode runway immediately — the JS
      side re-renders without it on the next visit anyway. */
   .explode-runway { display: none; }
+  /* Browse tracks collapse to a plain viewport-tall section and the stage
+     stops pinning: no tall tracks and no scroll-linked motion, just the
+     static assembled model per segment. ProductsBrowse also attaches no
+     scrub under reduced motion, so the scenes hold their rest pose. */
+  .browse-seg { min-height: 100svh; }
+  .browse-stage { position: static; }
   .reveal { opacity: 1 !important; transform: none !important; visibility: visible !important; }
   .reveal,
   body,

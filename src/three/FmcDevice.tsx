@@ -232,18 +232,18 @@ export function StageGlow({ color }: { color: string }): JSX.Element {
 
 /** Suspense shell: the GLB decodes off the critical path — the stage's
  *  lights and the page DOM never wait on it. */
-export function FmcDevice({ id }: { id: FmcId }): JSX.Element {
+export function FmcDevice({ id, showChips = true }: { id: FmcId; showChips?: boolean }): JSX.Element {
   const mode = useTheme();
   const glow = SCENE[mode].stageGlow;
   return (
     <Suspense fallback={null}>
       {glow !== null && <StageGlow color={glow} />}
-      <FmcModel id={id} />
+      <FmcModel id={id} showChips={showChips} />
     </Suspense>
   );
 }
 
-function FmcModel({ id }: { id: FmcId }): JSX.Element {
+function FmcModel({ id, showChips }: { id: FmcId; showChips: boolean }): JSX.Element {
   const cfg = CONFIGS[id];
   const group = useRef<THREE.Group>(null);
   const chipRefs = useRef<Array<HTMLDivElement | null>>([]);
@@ -422,7 +422,9 @@ function FmcModel({ id }: { id: FmcId }): JSX.Element {
     // only 3D consumer). Reduced motion pins the device assembled.
     const explode = reduced ? 0 : dampProductScroll(dt);
 
-    const live = !reduced && entrance.current >= 1 && explode > 0.5;
+    // Browse passes showChips=false: there the teardown is a fast teaser
+    // beside the product card, and the chips are detail mode's reward.
+    const live = showChips && !reduced && entrance.current >= 1 && explode > 0.5;
     if (live !== chipsLiveRef.current) {
       chipsLiveRef.current = live;
       setChipsLive(live);

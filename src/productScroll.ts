@@ -1,4 +1,4 @@
-import { clamp01, dampK, motionState } from "./motion";
+import { clamp01, dampK, motionState, phase } from "./motion";
 import { viewport } from "./responsive";
 
 /**
@@ -26,7 +26,55 @@ import { viewport } from "./responsive";
  *  ProductsPage sizes the runway from this single constant. */
 export const RUNWAY_SVH = 300;
 
-export const productScroll = { target: 0, current: 0 };
+/**
+ * Browse-mode track height per product, in svh. Each browse segment is a
+ * track this tall with a sticky stage inside it, so the card stays put
+ * while the model animates across `track − 100svh` of scroll.
+ *
+ * TUNE HERE. Total page length is intro(70) + Σ tracks + footer(~18):
+ * the values below give 1198svh ≈ 12 viewports. Shorter tracks scrub
+ * faster; anything under ~140 leaves too little travel for a teardown to
+ * read. Products not listed fall back to BROWSE_TRACK_DEFAULT_SVH.
+ */
+export const BROWSE_TRACK_SVH: Readonly<Record<string, number>> = {
+  tracker: 170,
+  city: 190,
+  fmc130: 200,
+  fmc920: 200,
+  galileosky: 200,
+  galileosky10: 150,
+};
+export const BROWSE_TRACK_DEFAULT_SVH = 180;
+
+/** Browse peaks at a fraction of the full animation: detail mode stays
+ *  the only place the teardown opens all the way, so the two modes don't
+ *  read as the same effect twice. */
+export const BROWSE_PEAK = 0.7;
+
+/** Fraction of a segment after which the NEXT product's assets are warmed,
+ *  so the swap at the segment boundary doesn't stall on a decode. */
+export const BROWSE_WARM_AT = 0.6;
+
+/**
+ * The scrub every mounted showcase reads.
+ *
+ *  · `target` / `current` — raw progress and its frame-damped copy.
+ *  · `driven` — whether a scroll driver is currently attached. Scenes that
+ *    also have a clock-based idle (tracker, city, galileosky10) use it to
+ *    decide which they are on: scroll-driven inside a browse track, their
+ *    own clock in detail mode, where those products have no runway.
+ */
+export const productScroll = { target: 0, current: 0, driven: false };
+
+/**
+ * Browse curve: 0 at the track's start, 1 at its middle, 0 again at its
+ * end. The model is therefore ASSEMBLED whenever a segment boundary — and
+ * so the scene swap — happens, and the whole thing is a pure function of
+ * scroll position, so it reverses exactly.
+ */
+export function browseCurve(p: number): number {
+  return phase(p, 0.12, 0.5) * (1 - phase(p, 0.5, 0.88));
+}
 
 const DAMP_BASE_POINTER = 0.0001; // remaining fraction after exactly 1s
 const DAMP_BASE_TOUCH = 0.000001;
@@ -64,6 +112,7 @@ export function attachProductScroll(
   // A restored scroll position (reload mid-track) starts the teardown ON
   // its beat instead of flying there from zero.
   productScroll.current = productScroll.target;
+  productScroll.driven = true;
   window.addEventListener("scroll", onScroll, { passive: true });
   window.addEventListener("resize", onScroll);
   return () => {
@@ -71,5 +120,62 @@ export function attachProductScroll(
     window.removeEventListener("resize", onScroll);
     productScroll.target = 0;
     productScroll.current = 0;
+    productScroll.driven = false;
+  };
+}
+
+/**
+ * Browse-mode driver: the same scrub store, fed per SEGMENT instead of
+ * per page.
+ *
+ * Progress runs 0→1 across one track's pinned travel — 0 the moment the
+ * track's top reaches the viewport top (card in place, model assembled),
+ * 1 when its bottom reaches the viewport bottom — then `browseCurve`
+ * turns that into the out-and-back the scenes actually play. Over exactly
+ * that span the viewport midline sits inside the same track, so this
+ * agrees with ProductsBrowse's IntersectionObserver by construction and
+ * the two can never disagree about which product is live.
+ *
+ * `onSegment` reports (id, p) so the page can warm the next product's
+ * assets partway through. Reduced motion never attaches this at all.
+ */
+export function attachBrowseScroll(
+  root: HTMLElement,
+  onSegment?: (id: string, p: number) => void,
+): () => void {
+  const onScroll = (): void => {
+    const segments = root.querySelectorAll<HTMLElement>(".browse-seg");
+    const y = window.scrollY;
+    const mid = y + window.innerHeight / 2;
+    let live: HTMLElement | null = null;
+    for (const el of segments) {
+      if (mid >= el.offsetTop && mid < el.offsetTop + el.offsetHeight) {
+        live = el;
+        break;
+      }
+    }
+    if (live === null) {
+      // Between the intro and the first track, or past the last one.
+      productScroll.target = 0;
+      return;
+    }
+    const travel = Math.max(1, live.offsetHeight - window.innerHeight);
+    const p = clamp01((y - live.offsetTop) / travel);
+    productScroll.target = BROWSE_PEAK * browseCurve(p);
+    const id = live.getAttribute("data-product");
+    if (id !== null) onSegment?.(id, p);
+  };
+
+  onScroll();
+  productScroll.current = productScroll.target;
+  productScroll.driven = true;
+  window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("resize", onScroll);
+  return () => {
+    window.removeEventListener("scroll", onScroll);
+    window.removeEventListener("resize", onScroll);
+    productScroll.target = 0;
+    productScroll.current = 0;
+    productScroll.driven = false;
   };
 }

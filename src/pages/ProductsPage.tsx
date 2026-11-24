@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import type { JSX } from "react";
+import type { CSSProperties, JSX } from "react";
 
 import { productKicker, PRODUCTS_PAGE, VISIBLE_PRODUCTS } from "../content";
 import { useLocale } from "../locale";
 import { motionState } from "../motion";
-import { attachProductScroll, RUNWAY_SVH } from "../productScroll";
+import {
+  attachBrowseScroll,
+  attachProductScroll,
+  BROWSE_TRACK_DEFAULT_SVH,
+  BROWSE_TRACK_SVH,
+  BROWSE_WARM_AT,
+  RUNWAY_SVH,
+} from "../productScroll";
 import { setProduct } from "../productState";
 import type { ProductId } from "../productState";
 import { hrefFor, hrefForProduct, navigate, useProductParam } from "../router";
@@ -94,6 +101,8 @@ function ProductsBrowse(): JSX.Element {
   const l = useLocale();
   const root = useRef<HTMLDivElement | null>(null);
   const committed = useRef<number | undefined>(undefined);
+  /** Segments whose successor has already been warmed — once each. */
+  const warmed = useRef<Set<string>>(new Set());
   // Which segment owns the viewport — DOM-side only, so the rail responds
   // on the same frame as the scroll.
   const [active, setActive] = useState<ProductId>(() => VISIBLE_PRODUCTS[0]?.id ?? "tracker");
@@ -150,11 +159,6 @@ function ProductsBrowse(): JSX.Element {
         window.clearTimeout(committed.current);
         committed.current = window.setTimeout(() => {
           setProduct(id);
-          // Warm the NEXT device's GLB while this segment reads, so the
-          // heavy fetches spread across the scroll instead of landing
-          // together on page entry.
-          const next = VISIBLE_PRODUCTS[VISIBLE_PRODUCTS.findIndex((p) => p.id === id) + 1];
-          if (next !== undefined) warm(next.id);
         }, COMMIT_MS);
       },
       { rootMargin: "-50% 0px -50% 0px", threshold: 0 },
@@ -163,8 +167,22 @@ function ProductsBrowse(): JSX.Element {
       io.observe(s);
     });
 
+    // Segment scrub. Reduced motion attaches nothing: the tracks collapse
+    // to one viewport in CSS and every scene holds its assembled pose.
+    const detachScrub = motionState.reduced
+      ? undefined
+      : attachBrowseScroll(el, (id, p) => {
+          // Warm the NEXT product partway through this one, so the swap at
+          // the boundary never stalls on a multi-megabyte decode.
+          if (p < BROWSE_WARM_AT || warmed.current.has(id)) return;
+          warmed.current.add(id);
+          const next = VISIBLE_PRODUCTS[VISIBLE_PRODUCTS.findIndex((x) => x.id === id) + 1];
+          if (next !== undefined) warm(next.id);
+        });
+
     return () => {
       io.disconnect();
+      detachScrub?.();
       window.removeEventListener("scroll", onScroll);
       window.clearTimeout(committed.current);
       markOpened();
@@ -183,28 +201,45 @@ function ProductsBrowse(): JSX.Element {
         </div>
       </section>
 
+      {/* One TRACK per product. The stage inside pins while the track
+          scrolls past, so the card holds still and the model animates
+          across the travel. Track height is the per-product tunable;
+          reduced motion collapses it back to one viewport in CSS. */}
       {VISIBLE_PRODUCTS.map((p, i) => (
-        <section className="browse-seg" key={p.id} data-product={p.id}>
-          <article
-            className={`copy-block product-card${p.id === active ? " is-active" : ""}`}
-            data-product={p.id}
-          >
-            <p className="kicker mono">{productKicker(p)}</p>
-            <h3 className="card-name">{p.name[l]}</h3>
-            <p className="mono card-tag" dir="ltr">
-              {p.tag}
-            </p>
-            <p className="card-blurb">{p.blurb[l]}</p>
-            <a className="btn primary card-cta" href={hrefForProduct(p.id)}>
-              {PRODUCTS_PAGE.detailsCta[l]}
-              <span className="sr-only"> — {p.name[l]}</span>
-            </a>
-          </article>
+        <section
+          className="browse-seg"
+          key={p.id}
+          data-product={p.id}
+          style={
+            {
+              "--track": `${String(BROWSE_TRACK_SVH[p.id] ?? BROWSE_TRACK_DEFAULT_SVH)}svh`,
+            } as CSSProperties
+          }
+        >
+          <div className="browse-stage">
+            <article
+              className={`copy-block product-card${p.id === active ? " is-active" : ""}`}
+              data-product={p.id}
+            >
+              <p className="kicker mono">{productKicker(p)}</p>
+              <h3 className="card-name">{p.name[l]}</h3>
+              <p className="mono card-tag" dir="ltr">
+                {p.tag}
+              </p>
+              <p className="card-blurb">{p.blurb[l]}</p>
+              <a className="btn primary card-cta" href={hrefForProduct(p.id)}>
+                {PRODUCTS_PAGE.detailsCta[l]}
+                <span className="sr-only"> — {p.name[l]}</span>
+              </a>
+            </article>
 
-          <p className="seg-count mono" aria-hidden="true" dir="ltr">
-            {String(i + 1).padStart(2, "0")}
-            <span className="seg-count-total">/{String(VISIBLE_PRODUCTS.length).padStart(2, "0")}</span>
-          </p>
+            <p className="seg-count mono" aria-hidden="true" dir="ltr">
+              {String(i + 1).padStart(2, "0")}
+              <span className="seg-count-total">
+                /{String(VISIBLE_PRODUCTS.length).padStart(2, "0")}
+              </span>
+            </p>
+          </div>
         </section>
       ))}
 
@@ -219,9 +254,12 @@ function ProductsBrowse(): JSX.Element {
             aria-current={p.id === active ? "true" : undefined}
             onClick={(e) => {
               e.preventDefault();
-              document
-                .querySelector(`.browse-seg[data-product="${p.id}"]`)
-                ?.scrollIntoView({ behavior: motionState.reduced ? "auto" : "smooth" });
+              // block:"start" lands on the track's top edge, which is
+              // progress 0 — the card in place and the model assembled.
+              document.querySelector(`.browse-seg[data-product="${p.id}"]`)?.scrollIntoView({
+                behavior: motionState.reduced ? "auto" : "smooth",
+                block: "start",
+              });
             }}
           >
             <span className="rail-num mono" dir="ltr">

@@ -11,7 +11,7 @@ import { dampK, lerp, motionState, phase } from "../motion";
 import { useProduct } from "../productState";
 import { useIsMobile, useViewportTier, viewport } from "../responsive";
 import type { ViewportTier } from "../responsive";
-import { getRoute, useRoute } from "../router";
+import { getRoute, useProductParam, useRoute } from "../router";
 import type { Route } from "../router";
 import { getTheme, SCENE, useTheme } from "../theme";
 import { CityScape3D } from "./CityScape3D";
@@ -246,6 +246,8 @@ function DevGlInfo(): null {
 function RouteScene(): JSX.Element | null {
   const route = useRoute();
   const product = useProduct();
+  // A product segment in the URL means detail mode; null means browse.
+  const inDetail = useProductParam() !== null;
 
   if (route === "home") {
     return (
@@ -264,7 +266,9 @@ function RouteScene(): JSX.Element | null {
     if (product === "city") return <CityScape3D />;
     if (product === "galileosky10") return <SimpleDevice id={product} />;
     if (product === "fmc130" || product === "fmc920" || product === "galileosky") {
-      return <FmcDevice id={product} />;
+      // Browse (no product segment in the URL) runs the teardown as a
+      // fast teaser with no part chips; detail mode keeps them.
+      return <FmcDevice id={product} showChips={inDetail} />;
     }
     return <Tracker />;
   }

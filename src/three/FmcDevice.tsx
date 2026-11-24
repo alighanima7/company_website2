@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { JSX } from "react";
 import * as THREE from "three";
 
-import { FMC130_CALLOUTS, FMC920_CALLOUTS } from "../content";
+import { FMC130_CALLOUTS, FMC920_CALLOUTS, GALILEOSKY_CALLOUTS } from "../content";
 import type { PartCallout } from "../content";
 import { getLocale, useLocale } from "../locale";
 import { lerp, motionState, phase } from "../motion";
@@ -38,7 +38,11 @@ import { SCENE, useTheme } from "../theme";
  * swings the spread across the screen as it opens.
  */
 
-export type FmcId = "fmc130" | "fmc920";
+/** Every device driven by this viewer. The name is historical — it now
+ *  carries any product whose GLB ships a real part split, not just the
+ *  FMC pair. Products with a single merged mesh use SimpleDevice instead;
+ *  this component never fakes a teardown. */
+export type FmcId = "fmc130" | "fmc920" | "galileosky";
 
 /** Engine axis the parts separate along (the devices' front/back). */
 const EXPLODE_AXIS: "x" | "y" | "z" = "z";
@@ -74,6 +78,13 @@ interface FmcConfig {
   /** Presentation yaw at full explosion — enough to read the Z-spread as
    *  depth, small enough that the label faces keep talking to the camera. */
   readonly openYaw: number;
+  /** Constant yaw that turns the model's large face toward the camera at
+   *  rest. The FMC exports already face +Z so they leave this at 0; the
+   *  Galileosky export is thin along X instead and needs a quarter turn.
+   *  Deliberately applied OUTSIDE the locale mirror — the camera moves to
+   *  the other side horizontally but stays on +Z, so the same face must
+   *  front the viewer in both locales. */
+  readonly baseYaw?: number;
   readonly callouts: readonly PartCallout[];
   /** Node name (sanitized: lowercase alphanumerics — three.js strips the
    *  dots from "root.0.refined") → part behavior. */
@@ -97,6 +108,42 @@ const CONFIGS: Record<FmcId, FmcConfig> = {
       root0refined: { callout: "f130-back", labelAt: [1.5, -1.2, -0.4] },
       root2: { callout: "f130-port", labelAt: [-1.25, -0.4, 0], travel: 1.6 },
       root3: { callout: "f130-rail", labelAt: [1.5, -0.6, 0.2], travel: 1.4 },
+    },
+  },
+  // Galileosky: a chunky box (1.58 long × 1.20 tall × 0.68 deep in source
+  // units) whose six nodes are three real things — the housing (root.0,
+  // 72% of the verts), four identical fittings at the corners of the -Z
+  // end face, and one fitting on the +Z end. All six separate; only the
+  // three TYPES carry a chip, so the view never claims four different
+  // parts where there is one part repeated. Parts already lie along Z, so
+  // EXPLODE_AXIS needs no change — only baseYaw, because this export is
+  // thin along X where the FMC pair is thin along Z.
+  galileosky: {
+    url: "/models/galileosky.glb",
+    span: 2.4,
+    // The source depth along Z IS its longest axis here (unlike the FMCs,
+    // where Z is the thin one), so the shared travel formula overshoots
+    // badly without this trim.
+    explodeScale: 0.55,
+    explodedScale: 0.84,
+    openYaw: -0.5,
+    // -90°, chosen by A/B render: it fronts the connector end panel (four
+    // corner fittings + terminal strip). +90° shows the opposite, plain
+    // slab face and reads as a featureless block.
+    baseYaw: -Math.PI / 2,
+    callouts: GALILEOSKY_CALLOUTS,
+    // labelAt is a LOCAL-space offset applied before the group's baseYaw,
+    // so local -Z lands on screen-right and +Z on screen-left. Values are
+    // tuned by render (as the FMC pairs' are) rather than derived — the
+    // chip anchor and the part's drawn position do not share a frame.
+    parts: {
+      root0: { callout: "gsky-housing", labelAt: [0, 1.7, 0] },
+      // One chip for the four — the other three travel unnarrated.
+      root1: { callout: "gsky-fitting", labelAt: [0, 0.9, -4.0], travel: 1.25 },
+      root2: { travel: 1.25 },
+      root3: { travel: 1.25 },
+      root4: { travel: 1.25 },
+      root5: { callout: "gsky-connector", labelAt: [0, -1.1, 1.6], travel: 1.4 },
     },
   },
   fmc920: {
@@ -145,7 +192,7 @@ interface PartState {
  *  theme (dark: a mid-teal halo so the black units silhouette instead of
  *  melting into the night canvas — chosen over the flat variant by A/B
  *  renders; light: null, the paper canvas separates on its own). */
-function StageGlow({ color }: { color: string }): JSX.Element {
+export function StageGlow({ color }: { color: string }): JSX.Element {
   const texture = useMemo(() => {
     const canvas = document.createElement("canvas");
     canvas.width = 256;
@@ -406,7 +453,7 @@ function FmcModel({ id }: { id: FmcId }): JSX.Element {
       // with it, so the Z-spread swings ACROSS the screen in both locales
       // instead of stacking into the view axis on one of them.
       const mx = getLocale() === "en" ? -1 : 1;
-      g.rotation.y = mx * (cfg.openYaw * open + (1 - inE) * 0.9) + sway;
+      g.rotation.y = (cfg.baseYaw ?? 0) + mx * (cfg.openYaw * open + (1 - inE) * 0.9) + sway;
       g.rotation.x = reduced ? 0 : Math.sin(t * 0.5) * 0.03 + 0.15 * open;
     }
 

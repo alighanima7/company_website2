@@ -7,17 +7,22 @@ import { useSyncExternalStore } from "react";
  * nothing, so the DOM side and the canvas side stay decoupled.
  */
 
-/** The lineup's order — also the browse sequence and the router's set of
- *  valid `#/products/<id>` segments. One source of truth; still imports
- *  nothing, so the router may depend on it without creating a cycle. */
-export const PRODUCT_IDS = ["tracker", "collar", "city", "fmc130", "fmc920"] as const;
+/** Every product id that EXISTS, in lineup order — including any that are
+ *  currently hidden. This is the type's source of truth only; what the
+ *  site actually shows is VISIBLE_PRODUCTS in content.ts, and the router
+ *  validates URLs against that. Kept here (importing nothing) so the type
+ *  stays available to content.ts without a cycle. */
+export const PRODUCT_IDS = [
+  "tracker",
+  "collar",
+  "city",
+  "fmc130",
+  "fmc920",
+  "galileosky",
+  "galileosky10",
+] as const;
 
 export type ProductId = (typeof PRODUCT_IDS)[number];
-
-/** Narrows a raw URL segment. Anything else is not a product. */
-export function isProductId(value: string): value is ProductId {
-  return (PRODUCT_IDS as readonly string[]).includes(value);
-}
 
 const listeners = new Set<() => void>();
 

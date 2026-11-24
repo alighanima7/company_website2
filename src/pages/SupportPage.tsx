@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 
-import { CONTACT, FAQS, FORM, PRODUCTS, SUPPORT_PAGE, TICKET_CATEGORIES, TICKET_PRIORITIES } from "../content";
+import {
+  CONTACT,
+  FAQS,
+  FORM,
+  SUPPORT_PAGE,
+  TICKET_CATEGORIES,
+  TICKET_PRIORITIES,
+  VISIBLE_PRODUCTS,
+} from "../content";
 import { useLocale } from "../locale";
 import type { Locale } from "../locale";
 import { emailOk, Field, mailtoHref, makeRef } from "../ui/FormBits";
@@ -62,7 +70,9 @@ function TicketForm({ l }: { l: Locale }): JSX.Element {
 
     const ref = makeRef();
     const productLabel =
-      form.product === "other" ? FORM.otherProduct.en : PRODUCTS.find((p) => p.id === form.product)?.name.en ?? form.product;
+      form.product === "other"
+        ? FORM.otherProduct.en
+        : VISIBLE_PRODUCTS.find((p) => p.id === form.product)?.name.en ?? form.product;
     const category = TICKET_CATEGORIES[Number(form.category) - 1];
     const priority = TICKET_PRIORITIES[Number(form.priority)];
     setDone({
@@ -167,7 +177,8 @@ function TicketForm({ l }: { l: Locale }): JSX.Element {
             }}
           >
             <option value="">{FORM.select[l]}</option>
-            {PRODUCTS.map((p) => (
+            {/* Hidden products are not offered on the ticket form. */}
+            {VISIBLE_PRODUCTS.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name[l]}
               </option>

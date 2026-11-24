@@ -44,6 +44,22 @@ const MODELS = [
     input: "3d_model/FMC920/base_basic_pbr.glb",
     output: "public/models/fmc920.glb",
   },
+  // Galileosky: six real mesh nodes (one housing, four end fittings, one
+  // front connector) — the default recipe preserves the split the exploded
+  // view needs and still lands near 1 MB, so no -lite variant is needed.
+  {
+    input: "3d_model/galileosky/base_basic_pbr.glb",
+    output: "public/models/galileosky.glb",
+  },
+  // Galileosky 10: a single merged mesh (no part split — presented static
+  // with a gentle turn, never exploded). Its generator left the emissive
+  // map loose like the logo's, so it gets wired here for the dark theme's
+  // bloom to pick up.
+  {
+    input: "3d_model/galileosky10/base_basic_pbr.glb",
+    output: "public/models/galileosky10.glb",
+    emissive: "3d_model/galileosky10/texture_emissive.png",
+  },
   // Aggressive FMC130 variant: the label shell's dense relief holds ~286k
   // verts under the default 0.1% error cap (→3MB file) — a 1% cap plus
   // 512px textures trades micro-relief for a much smaller download.

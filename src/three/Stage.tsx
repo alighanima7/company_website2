@@ -4,7 +4,7 @@ import type { JSX } from "react";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 
-import { COPY } from "../content";
+import { COPY, isVisibleProductId } from "../content";
 import { dampHomeScroll } from "../homeScroll";
 import { getLocale, useLocale } from "../locale";
 import { dampK, lerp, motionState, phase } from "../motion";
@@ -19,6 +19,7 @@ import { Collar3D } from "./Collar3D";
 import { FmcDevice } from "./FmcDevice";
 import { KsaMap3D } from "./KsaMap3D";
 import { Logo3D } from "./Logo3D";
+import { SimpleDevice } from "./SimpleDevice";
 import { Tracker } from "./Tracker";
 
 /** Post stack loads on demand — touch devices never fetch its chunks. */
@@ -255,9 +256,16 @@ function RouteScene(): JSX.Element | null {
     );
   }
   if (route === "products") {
+    // A hidden product's scene must never mount, even if some stale state
+    // still names it. The router already refuses its URL; this is the
+    // second gate, on the canvas side.
+    if (!isVisibleProductId(product)) return null;
     if (product === "collar") return <Collar3D />;
     if (product === "city") return <CityScape3D />;
-    if (product === "fmc130" || product === "fmc920") return <FmcDevice id={product} />;
+    if (product === "galileosky10") return <SimpleDevice id={product} />;
+    if (product === "fmc130" || product === "fmc920" || product === "galileosky") {
+      return <FmcDevice id={product} />;
+    }
     return <Tracker />;
   }
   return null;

@@ -488,17 +488,82 @@ export const FMC920_CALLOUTS: readonly PartCallout[] = [
   },
 ];
 
+/** Galileosky — the GLB ships SIX mesh nodes, but they are three distinct
+ *  things: one main housing, four identical fittings on one end face, and
+ *  a single fitting on the opposite end. All six separate in the exploded
+ *  view; only the three real types carry a callout (the three duplicate
+ *  fittings travel without a chip, exactly as FMC920's fourth node does).
+ *  Part names describe what is observably in the model — every spec is a
+ *  [TODO] until the content owner supplies profile-sourced figures. */
+export const GALILEOSKY_CALLOUTS: readonly PartCallout[] = [
+  {
+    id: "gsky-housing",
+    tag: "[TODO] HOUSING",
+    desc: { ar: "[TODO] الهيكل الرئيسي للجهاز", en: "[TODO] Main device housing" },
+    spec: "[TODO] SPEC",
+  },
+  {
+    id: "gsky-fitting",
+    tag: "[TODO] END FITTINGS",
+    desc: { ar: "[TODO] أربع وصلات في أركان الطرف الخلفي", en: "[TODO] Four fittings at the rear end corners" },
+    spec: "[TODO] SPEC",
+  },
+  {
+    id: "gsky-connector",
+    tag: "[TODO] FRONT CONNECTOR",
+    desc: { ar: "[TODO] وصلة الطرف الأمامي", en: "[TODO] Front end connector" },
+    spec: "[TODO] SPEC",
+  },
+];
+
+/** Galileosky 10 — a single merged mesh with no part split, so it gets a
+ *  static presentation with a gentle turn rather than a faked teardown.
+ *  These rows are spec-table placeholders only; they anchor nothing in 3D
+ *  and every one is a [TODO] awaiting real figures. */
+export const GALILEOSKY10_CALLOUTS: readonly PartCallout[] = [
+  {
+    id: "gsky10-spec-1",
+    tag: "[TODO] SPEC ROW 1",
+    desc: { ar: "[TODO] وصف المواصفة الأولى", en: "[TODO] First specification" },
+    spec: "[TODO] SPEC",
+  },
+  {
+    id: "gsky10-spec-2",
+    tag: "[TODO] SPEC ROW 2",
+    desc: { ar: "[TODO] وصف المواصفة الثانية", en: "[TODO] Second specification" },
+    spec: "[TODO] SPEC",
+  },
+  {
+    id: "gsky10-spec-3",
+    tag: "[TODO] SPEC ROW 3",
+    desc: { ar: "[TODO] وصف المواصفة الثالثة", en: "[TODO] Third specification" },
+    spec: "[TODO] SPEC",
+  },
+];
+
 export interface Product {
   readonly id: ProductId;
   readonly name: Bi;
   /** Mono spec strip under the name. */
   readonly tag: string;
-  readonly kicker: string;
+  /** Mono kicker WITHOUT its number — the leading "NN // " is composed from
+   *  the product's position in VISIBLE_PRODUCTS at render time, so the
+   *  kickers, the rail and the "NN / NN" counter can never disagree and
+   *  hiding or adding a product renumbers the lineup by itself. */
+  readonly kickerLabel: string;
   readonly blurb: Bi;
   /** Spec table rows (the same hardware families the 3D callouts cite). */
   readonly callouts: readonly PartCallout[];
   /** Optional capability chips. */
   readonly chips?: readonly Bi[];
+  /**
+   * THE SWITCH. Set to true to take a product off the site completely:
+   * it leaves the browse sequence, the rail, the counter, the support
+   * ticket picker and the set of valid `#/products/<id>` routes, and its
+   * 3D scene is never mounted. Nothing is deleted — flip the flag back
+   * and the product returns, renumbered automatically.
+   */
+  readonly hidden?: boolean;
 }
 
 export const PRODUCTS: readonly Product[] = [
@@ -506,15 +571,21 @@ export const PRODUCTS: readonly Product[] = [
     id: "tracker",
     name: { ar: "جهاز التتبع المتقدم", en: "Advanced Tracking Unit" },
     tag: "AVL · FMS · SATELLITE",
-    kicker: "01 // TRACKING HARDWARE",
+    kickerLabel: "TRACKING HARDWARE",
     blurb: COPY.teardown.lead,
     callouts: PART_CALLOUTS,
   },
   {
+    // ── HIDDEN (reversible) ──────────────────────────────────────────
+    // Delete the `hidden` line below to bring the field collar back. Its
+    // content, callouts, sensor chips, theme tokens and the procedural
+    // Collar3D scene are all still here and still referenced — nothing
+    // was removed, and the lineup renumbers itself on the way back in.
+    hidden: true,
     id: "collar",
     name: { ar: "طوق التتبع الميداني", en: "Field Tracking Collar" },
     tag: "GPS · SOLAR · SATELLITE",
-    kicker: "02 // FIELD UNIT",
+    kickerLabel: "FIELD UNIT",
     blurb: COPY.collar.lead,
     callouts: COLLAR_CALLOUTS,
     chips: COLLAR_SENSORS,
@@ -523,7 +594,7 @@ export const PRODUCTS: readonly Product[] = [
     id: "city",
     name: { ar: "منظومة المدينة الذكية", en: "Smart City Platform" },
     tag: "IOT · CITY OPERATIONS",
-    kicker: "03 // SMART CITY",
+    kickerLabel: "SMART CITY",
     blurb: COPY.city.lead,
     callouts: CITY_CALLOUTS,
     chips: CITY_FEATURES,
@@ -532,7 +603,7 @@ export const PRODUCTS: readonly Product[] = [
     id: "fmc130",
     name: { ar: "جهاز FMC130", en: "FMC130 Terminal" },
     tag: "[TODO] TAG LINE",
-    kicker: "04 // VEHICLE TERMINAL",
+    kickerLabel: "VEHICLE TERMINAL",
     blurb: {
       ar: "[TODO] وصف تعريفي قصير لجهاز FMC130 — مرّر للأسفل لتفكيك الجهاز قطعةً قطعة.",
       en: "[TODO] Short introduction for the FMC130 terminal — scroll to take the unit apart piece by piece.",
@@ -543,21 +614,65 @@ export const PRODUCTS: readonly Product[] = [
     id: "fmc920",
     name: { ar: "جهاز FMC920", en: "FMC920 Tracker" },
     tag: "[TODO] TAG LINE",
-    kicker: "05 // COMPACT TRACKER",
+    kickerLabel: "COMPACT TRACKER",
     blurb: {
       ar: "[TODO] وصف تعريفي قصير لجهاز FMC920 — مرّر للأسفل لفصل الوحدة عن ضفيرة التوصيل.",
       en: "[TODO] Short introduction for the FMC920 tracker — scroll to unplug the unit from its install harness.",
     },
     callouts: FMC920_CALLOUTS,
   },
+  {
+    id: "galileosky",
+    name: { ar: "جهاز Galileosky", en: "Galileosky Terminal" },
+    tag: "[TODO] TAG LINE",
+    kickerLabel: "[TODO] GALILEOSKY",
+    blurb: {
+      ar: "[TODO] وصف تعريفي قصير لجهاز Galileosky — مرّر للأسفل لتفكيك الجهاز قطعةً قطعة.",
+      en: "[TODO] Short introduction for the Galileosky terminal — scroll to take the unit apart piece by piece.",
+    },
+    callouts: GALILEOSKY_CALLOUTS,
+  },
+  {
+    id: "galileosky10",
+    name: { ar: "جهاز Galileosky 10", en: "Galileosky 10" },
+    tag: "[TODO] TAG LINE",
+    kickerLabel: "[TODO] GALILEOSKY 10",
+    blurb: {
+      ar: "[TODO] وصف تعريفي قصير لجهاز Galileosky 10.",
+      en: "[TODO] Short introduction for the Galileosky 10.",
+    },
+    callouts: GALILEOSKY10_CALLOUTS,
+  },
 ];
+
+/** The lineup the site actually shows. EVERY list derives from this one:
+ *  the browse sequence, the rail, the "NN / NN" counter, the support
+ *  ticket picker, the valid `#/products/<id>` routes and which 3D scene
+ *  may mount. Hidden products keep their data and their scene — they are
+ *  simply not in here. */
+export const VISIBLE_PRODUCTS: readonly Product[] = PRODUCTS.filter((p) => p.hidden !== true);
+
+/** A hidden product's id is not a route: `#/products/collar` takes exactly
+ *  the same path as `#/products/not-a-thing` and lands on the sequence. */
+export function isVisibleProductId(value: string): value is ProductId {
+  return VISIBLE_PRODUCTS.some((p) => p.id === value);
+}
+
+/** "03 // VEHICLE TERMINAL" — the number comes from the VISIBLE position,
+ *  never from the data, so it cannot drift out of step with the rail. */
+export function productKicker(product: Product): string {
+  const index = VISIBLE_PRODUCTS.findIndex((p) => p.id === product.id);
+  return `${String(index + 1).padStart(2, "0")} // ${product.kickerLabel}`;
+}
 
 export const PRODUCTS_PAGE = {
   kicker: "02 // PRODUCT LINEUP",
   h2: { ar: "عتاد المنصة، قطعةً قطعة", en: "The platform's hardware, piece by piece" },
+  /** Deliberately carries NO product count: a literal number here goes
+   *  stale every time a product is hidden or added. */
   lead: {
-    ar: "خمسة منتجات تغطي المركبة والميدان والمدينة — اختر منتجًا لاستكشافه ثلاثي الأبعاد.",
-    en: "Five products covering vehicle, field and city — pick a product to inspect it in 3D.",
+    ar: "عتاد يغطي المركبة والمدينة — اختر منتجًا لاستكشافه ثلاثي الأبعاد.",
+    en: "Hardware covering vehicle and city — pick a product to inspect it in 3D.",
   },
   switchLabel: { ar: "اختيار المنتج", en: "Select product" },
   specsTitle: { ar: "المواصفات", en: "Specifications" },

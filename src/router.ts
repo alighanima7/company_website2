@@ -1,13 +1,14 @@
 import { useSyncExternalStore } from "react";
 
-import { isProductId } from "./productState";
+import { isVisibleProductId } from "./content";
 import type { ProductId } from "./productState";
 
 /**
  * Hash router — the same contract as the theme and locale stores: a tiny
- * module-level singleton with useSyncExternalStore. Its only dependency is
- * productState (for the set of valid product segments), which itself
- * imports nothing — so the graph stays strictly acyclic.
+ * module-level singleton with useSyncExternalStore. It depends on content
+ * for the set of VISIBLE product segments; content's own imports are all
+ * type-only and vanish at build, so the runtime graph stays acyclic and
+ * content is fully evaluated before this module parses the first hash.
  *
  *  · Hash-based (`#/products`) so the SPA deep-links and refreshes work on
  *    any static host with no rewrite rules, and navigation never reloads
@@ -45,7 +46,9 @@ function parse(hash: string): Location {
   if (path === ROUTE_PATHS.products) return { route: "products", product: null };
   if (path.startsWith(`${ROUTE_PATHS.products}/`)) {
     const segment = path.slice(ROUTE_PATHS.products.length + 1);
-    return { route: "products", product: isProductId(segment) ? segment : null };
+    // Validated against the VISIBLE lineup: a hidden product's id is not a
+    // route, so it falls back to the sequence like any unknown segment.
+    return { route: "products", product: isVisibleProductId(segment) ? segment : null };
   }
   if (path === ROUTE_PATHS.support) return { route: "support", product: null };
   if (path === ROUTE_PATHS.requests) return { route: "requests", product: null };

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 
-import { PRODUCTS, PRODUCTS_PAGE } from "../content";
+import { productKicker, PRODUCTS_PAGE, VISIBLE_PRODUCTS } from "../content";
 import { useLocale } from "../locale";
 import { motionState } from "../motion";
 import { attachProductScroll, RUNWAY_SVH } from "../productScroll";
@@ -10,6 +10,7 @@ import type { ProductId } from "../productState";
 import { hrefFor, hrefForProduct, navigate, useProductParam } from "../router";
 import { preloadFmc } from "../three/FmcDevice";
 import { useSceneFailed } from "../three/SceneBoundary";
+import { preloadSimple } from "../three/SimpleDevice";
 import { initReveals } from "../ui/reveal";
 
 /** Static product shots (baked from the real models) that stand in for
@@ -19,8 +20,17 @@ const STATIC_SHOTS: Partial<Record<string, string>> = {
   fmc920: "/images/fmc920-static.webp",
 };
 
-function isFmcId(id: ProductId): id is "fmc130" | "fmc920" {
-  return id === "fmc130" || id === "fmc920";
+/** Products whose GLB ships a real part split — these get the pinned
+ *  stage + runway teardown. Everything else is a plain document. */
+function hasTeardown(id: ProductId): id is "fmc130" | "fmc920" | "galileosky" {
+  return id === "fmc130" || id === "fmc920" || id === "galileosky";
+}
+
+/** Warm the heavy GLB for a product that is about to come into view.
+ *  Products with procedural scenes have nothing to fetch. */
+function warm(id: ProductId): void {
+  if (id === "fmc130" || id === "fmc920" || id === "galileosky") preloadFmc(id);
+  else if (id === "galileosky10") preloadSimple(id);
 }
 
 /* ── Cross-mode memory ────────────────────────────────────────────────
@@ -42,13 +52,14 @@ let openedFromBrowse = false;
  * Products — the lineup as a scroll sequence (browse) plus one view per
  * product (detail), switched by the URL alone:
  *
- *  · `#/products`          browse: five viewport-tall segments, each a
- *    compact card, with the persistent Stage canvas swapping to that
- *    product's showcase as its segment takes the viewport.
- *  · `#/products/<id>`     detail: that product on its own. The FMC
- *    devices keep their scroll-driven teardown exactly as before — a
+ *  · `#/products`          browse: one viewport-tall segment per VISIBLE
+ *    product, each a compact card, with the persistent Stage canvas
+ *    swapping to that product's showcase as its segment takes the
+ *    viewport. Hidden products are absent from every list here.
+ *  · `#/products/<id>`     detail: that product on its own. Devices whose
+ *    GLB ships a real part split keep the scroll-driven teardown — a
  *    pinned stage over a runway — with the spec table as a normal section
- *    below it.
+ *    below it; single-mesh products are a plain document.
  *
  * The two scroll-driven systems can never run together: the browse
  * scroll-spy lives only in ProductsBrowse, and attachProductScroll is
@@ -85,7 +96,7 @@ function ProductsBrowse(): JSX.Element {
   const committed = useRef<number | undefined>(undefined);
   // Which segment owns the viewport — DOM-side only, so the rail responds
   // on the same frame as the scroll.
-  const [active, setActive] = useState<ProductId>(() => PRODUCTS[0]?.id ?? "tracker");
+  const [active, setActive] = useState<ProductId>(() => VISIBLE_PRODUCTS[0]?.id ?? "tracker");
 
   useEffect(() => {
     const el = root.current;
@@ -142,8 +153,8 @@ function ProductsBrowse(): JSX.Element {
           // Warm the NEXT device's GLB while this segment reads, so the
           // heavy fetches spread across the scroll instead of landing
           // together on page entry.
-          const next = PRODUCTS[PRODUCTS.findIndex((p) => p.id === id) + 1];
-          if (next !== undefined && isFmcId(next.id)) preloadFmc(next.id);
+          const next = VISIBLE_PRODUCTS[VISIBLE_PRODUCTS.findIndex((p) => p.id === id) + 1];
+          if (next !== undefined) warm(next.id);
         }, COMMIT_MS);
       },
       { rootMargin: "-50% 0px -50% 0px", threshold: 0 },
@@ -164,7 +175,7 @@ function ProductsBrowse(): JSX.Element {
     <div className="page page-products page-browse" ref={root}>
       {/* Lead-in. The page-level kicker is deliberately not rendered here:
           it numbers by nav order ("02 // PRODUCT LINEUP") and would sit
-          directly above the products' own 01–05 run. */}
+          directly above the products' own 01..NN run. */}
       <section className="products-intro">
         <div className="copy-block intro-block">
           <h2 className="reveal">{PRODUCTS_PAGE.h2[l]}</h2>
@@ -172,13 +183,13 @@ function ProductsBrowse(): JSX.Element {
         </div>
       </section>
 
-      {PRODUCTS.map((p, i) => (
+      {VISIBLE_PRODUCTS.map((p, i) => (
         <section className="browse-seg" key={p.id} data-product={p.id}>
           <article
             className={`copy-block product-card${p.id === active ? " is-active" : ""}`}
             data-product={p.id}
           >
-            <p className="kicker mono">{p.kicker}</p>
+            <p className="kicker mono">{productKicker(p)}</p>
             <h3 className="card-name">{p.name[l]}</h3>
             <p className="mono card-tag" dir="ltr">
               {p.tag}
@@ -192,7 +203,7 @@ function ProductsBrowse(): JSX.Element {
 
           <p className="seg-count mono" aria-hidden="true" dir="ltr">
             {String(i + 1).padStart(2, "0")}
-            <span className="seg-count-total">/{String(PRODUCTS.length).padStart(2, "0")}</span>
+            <span className="seg-count-total">/{String(VISIBLE_PRODUCTS.length).padStart(2, "0")}</span>
           </p>
         </section>
       ))}
@@ -200,7 +211,7 @@ function ProductsBrowse(): JSX.Element {
       {/* Position indicator + jump links. Hidden below 768px, where the
           card's own 01–05 kicker carries the same information. */}
       <nav className="product-rail" aria-label={PRODUCTS_PAGE.switchLabel[l]}>
-        {PRODUCTS.map((p, i) => (
+        {VISIBLE_PRODUCTS.map((p, i) => (
           <a
             key={p.id}
             className="rail-item"
@@ -234,8 +245,8 @@ function ProductDetail({ id }: { id: ProductId }): JSX.Element {
   const cue = useRef<HTMLDivElement | null>(null);
   const glFailed = useSceneFailed();
 
-  const product = PRODUCTS.find((p) => p.id === id);
-  const isFmc = product !== undefined && isFmcId(product.id);
+  const product = VISIBLE_PRODUCTS.find((p) => p.id === id);
+  const isFmc = product !== undefined && hasTeardown(product.id);
   const trackOn = isFmc && !motionState.reduced && !glFailed;
 
   // The URL is the source of truth for which showcase is on the canvas.
@@ -336,7 +347,7 @@ function ProductDetail({ id }: { id: ProductId }): JSX.Element {
   const head = (
     <>
       {back}
-      <p className="kicker mono">{product.kicker}</p>
+      <p className="kicker mono">{productKicker(product)}</p>
       <h2 className="detail-name" tabIndex={-1} ref={title}>
         {product.name[l]}
       </h2>

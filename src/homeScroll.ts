@@ -1,4 +1,5 @@
 import { clamp01, dampK, motionState } from "./motion";
+import { FLAGS, timedCall } from "./perf/probe";
 import { viewport } from "./responsive";
 
 /**
@@ -49,15 +50,23 @@ export function attachHomeScroll(
   endEl: HTMLElement,
   onUpdate?: (t: number) => void,
 ): () => void {
-  const onScroll = (): void => {
+  const onScroll = timedCall("scroll:home", (): void => {
     const end = Math.max(1, endEl.offsetTop + endEl.offsetHeight - window.innerHeight);
     homeScroll.target = clamp01(window.scrollY / end);
     onUpdate?.(homeScroll.target);
-  };
+  });
   onScroll();
   // A restored scroll position (reload mid-page) starts the film ON its
   // beat instead of flying there from zero.
   homeScroll.current = homeScroll.target;
+  // ?noscroll=1 — bind no listener; the scene holds the pose the first
+  // read produced, so only the per-event handler cost disappears.
+  if (FLAGS.noscroll) {
+    return () => {
+      homeScroll.target = 0;
+      homeScroll.current = 0;
+    };
+  }
   window.addEventListener("scroll", onScroll, { passive: true });
   window.addEventListener("resize", onScroll);
   return () => {

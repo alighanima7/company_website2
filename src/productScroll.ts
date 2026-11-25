@@ -1,4 +1,5 @@
 import { clamp01, dampK, motionState, phase } from "./motion";
+import { FLAGS, timedCall } from "./perf/probe";
 import { viewport } from "./responsive";
 
 /**
@@ -205,18 +206,31 @@ export function attachProductScroll(
   trackEl: HTMLElement,
   onUpdate?: (t: number) => void,
 ): () => void {
-  const onScroll = (): void => {
+  const onScroll = timedCall("scroll:detail", (): void => {
     const end = Math.max(1, trackEl.offsetTop + trackEl.offsetHeight - window.innerHeight);
     productScroll.target = clamp01(window.scrollY / end);
     // Detail mode keeps its own yaw (openYaw); no browse revolution here.
     productScroll.turn = 0;
     onUpdate?.(productScroll.target);
-  };
+  });
   onScroll();
   // A restored scroll position (reload mid-track) starts the teardown ON
   // its beat instead of flying there from zero.
   productScroll.current = productScroll.target;
   productScroll.driven = true;
+  // ?noscroll=1 - bind no listener, but leave `driven` set, so the scenes
+  // stay on exactly the branch they normally take and only the per-event
+  // handler cost disappears. Changing `driven` would switch them to their
+  // clock idles and measure a different scene.
+  if (FLAGS.noscroll) {
+    return () => {
+      productScroll.target = 0;
+      productScroll.current = 0;
+      productScroll.turn = 0;
+      productScroll.turnCurrent = 0;
+      productScroll.driven = false;
+    };
+  }
   window.addEventListener("scroll", onScroll, { passive: true });
   window.addEventListener("resize", onScroll);
   return () => {
@@ -249,7 +263,7 @@ export function attachBrowseScroll(
   root: HTMLElement,
   onSegment?: (id: string, p: number) => void,
 ): () => void {
-  const onScroll = (): void => {
+  const onScroll = timedCall("scroll:browse", (): void => {
     const segments = root.querySelectorAll<HTMLElement>(".browse-seg");
     const y = window.scrollY;
     const mid = y + window.innerHeight / 2;
@@ -274,11 +288,21 @@ export function attachBrowseScroll(
     const segId = live.getAttribute("data-product");
     productScroll.turn = segId !== null && TURN_EXCLUDE.includes(segId) ? 0 : browseTurn(p);
     if (segId !== null) onSegment?.(segId, p);
-  };
+  });
 
   onScroll();
   productScroll.current = productScroll.target;
   productScroll.driven = true;
+  // ?noscroll=1 - see attachProductScroll: listener off, `driven` kept.
+  if (FLAGS.noscroll) {
+    return () => {
+      productScroll.target = 0;
+      productScroll.current = 0;
+      productScroll.turn = 0;
+      productScroll.turnCurrent = 0;
+      productScroll.driven = false;
+    };
+  }
   window.addEventListener("scroll", onScroll, { passive: true });
   window.addEventListener("resize", onScroll);
   return () => {

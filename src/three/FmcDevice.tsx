@@ -8,6 +8,7 @@ import { FMC130_CALLOUTS, FMC920_CALLOUTS, GALILEOSKY_CALLOUTS } from "../conten
 import type { PartCallout } from "../content";
 import { getLocale, useLocale } from "../locale";
 import { lerp, motionState, phase } from "../motion";
+import { FLAGS, timedFrame } from "../perf/probe";
 import { dampProductScroll, productScroll, productTurn } from "../productScroll";
 import { applyBackDim, backDimScale, captureDimBase } from "./backDim";
 import { useIsMobile, useViewportTier } from "../responsive";
@@ -414,7 +415,7 @@ function FmcModel({ id, showChips }: { id: FmcId; showChips: boolean }): JSX.Ele
     };
   }, [gltf.scene, gltf.materials, cfg.url]);
 
-  useFrame((state, dt) => {
+  useFrame(timedFrame("frame:fmc", (state, dt) => {
     const t = state.clock.elapsedTime;
     const reduced = motionState.reduced;
 
@@ -486,7 +487,7 @@ function FmcModel({ id, showChips }: { id: FmcId; showChips: boolean }): JSX.Ele
       g.rotation.x = (reduced ? 0 : Math.sin(t * 0.5) * 0.03 * idle) + 0.15 * open;
     }
 
-    applyBackDim(dimBase, turnForDim, SCENE[mode].canvas);
+    if (!FLAGS.nodim) applyBackDim(dimBase, turnForDim, SCENE[mode].canvas);
 
     // Chips fade in across the last stretch of the opening, one after
     // another, and back out in reverse on the way down.
@@ -501,7 +502,7 @@ function FmcModel({ id, showChips }: { id: FmcId; showChips: boolean }): JSX.Ele
       }
       chipIndex += 1;
     }
-  });
+  }));
 
   // Narrow frames pull the chip ring in — every chip must stay inside its
   // zone (phone stack / tablet half); mobile also renders compact.
@@ -518,7 +519,7 @@ function FmcModel({ id, showChips }: { id: FmcId; showChips: boolean }): JSX.Ele
         </group>
       </group>
 
-      {chipsLive &&
+      {chipsLive && !FLAGS.nohtml &&
         parts.map((p) => {
           if (p.chip === undefined) return null;
           chipIndex += 1;

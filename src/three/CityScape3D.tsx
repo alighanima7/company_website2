@@ -8,6 +8,7 @@ import type { Line2, LineSegments2 } from "three-stdlib";
 import { CITY_CALLOUTS } from "../content";
 import { useLocale } from "../locale";
 import { clamp01, lerp, motionState, phase } from "../motion";
+import { FLAGS, timedFrame } from "../perf/probe";
 import { BROWSE_PEAK, dampProductScroll, productScroll, productTurn } from "../productScroll";
 import { useIsMobile } from "../responsive";
 import { SCENE, useTheme } from "../theme";
@@ -159,7 +160,7 @@ export function CityScape3D(): JSX.Element {
 
   const P = SCENE[mode];
 
-  useFrame((state, dt) => {
+  useFrame(timedFrame("frame:city", (state, dt) => {
     const t = state.clock.elapsedTime;
     const reduced = motionState.reduced;
 
@@ -252,7 +253,7 @@ export function CityScape3D(): JSX.Element {
       el.style.opacity = String(o);
       el.style.transform = `translateY(${String((1 - o) * 8)}px)`;
     });
-  });
+  }));
 
   const calloutFor = (id: string): JSX.Element | null => {
     const index = CITY_CALLOUTS.findIndex((c) => c.id === id);
@@ -339,7 +340,7 @@ export function CityScape3D(): JSX.Element {
           </group>
         ))}
         </group>
-        {calloutsLive && calloutFor("building")}
+        {calloutsLive && !FLAGS.nohtml && calloutFor("building")}
 
         {/* ── Pillar 2 · Smart Parking: lot + occupancy dots (−x, +z) ── */}
         <group ref={parkRef}>
@@ -357,7 +358,7 @@ export function CityScape3D(): JSX.Element {
           </group>
         ))}
         </group>
-        {calloutsLive && calloutFor("parking")}
+        {calloutsLive && !FLAGS.nohtml && calloutFor("parking")}
 
         {/* ── Pillar 3 · Smart Street Lighting: lamp arc (−z) ── */}
         <group ref={lampsRef}>
@@ -376,7 +377,7 @@ export function CityScape3D(): JSX.Element {
           );
         })}
         </group>
-        {calloutsLive && calloutFor("lighting")}
+        {calloutsLive && !FLAGS.nohtml && calloutFor("lighting")}
 
         {/* ── Pillar 4 · Waste + Metering (−x, −z) ── */}
         <group ref={binsRef}>
@@ -404,7 +405,7 @@ export function CityScape3D(): JSX.Element {
           <ringGeometry args={[0.13, 0.145, 24]} />
           <meshBasicMaterial color={P.cityPulse} transparent opacity={0.8} />
         </mesh>
-        {calloutsLive && calloutFor("waste")}
+        {calloutsLive && !FLAGS.nohtml && calloutFor("waste")}
       </group>
     </group>
   );

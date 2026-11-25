@@ -9,6 +9,7 @@ import { CITIES, KSA_OUTLINE } from "../content";
 import { homeScroll } from "../homeScroll";
 import { useLocale } from "../locale";
 import { clamp01, lerp, motionState, phase } from "../motion";
+import { FLAGS, timedFrame } from "../perf/probe";
 import { viewport } from "../responsive";
 import { SCENE, useTheme } from "../theme";
 
@@ -303,7 +304,7 @@ function KsaMapScene(): JSX.Element {
   }, []);
 
   /* ── Per-frame choreography: scroll-staged depth reveal ─────────────── */
-  useFrame((state) => {
+  useFrame(timedFrame("frame:ksamap", (state) => {
     const t = state.clock.elapsedTime;
     const reduced = motionState.reduced;
     const p = homeScroll.current;
@@ -409,7 +410,7 @@ function KsaMapScene(): JSX.Element {
         }
       }
     }
-  });
+  }));
 
   return (
     <group ref={root} visible={false}>
@@ -460,7 +461,7 @@ function KsaMapScene(): JSX.Element {
               <ringGeometry args={[0.3, 0.36, 40]} />
               <meshBasicMaterial color={color} transparent opacity={0} blending={P.glowBlending} depthWrite={false} />
             </mesh>
-            {labelsLive && (
+            {labelsLive && !FLAGS.nohtml && (
               <Html center distanceFactor={11} position={[0, hub ? 1.92 : 1.5, 0]} zIndexRange={[20, 11]}>
                 <div
                   className="city-label"

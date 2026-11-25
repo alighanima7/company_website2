@@ -6,6 +6,7 @@ import * as THREE from "three";
 
 import { homeScroll } from "../homeScroll";
 import { motionState, phase } from "../motion";
+import { FLAGS, timedFrame } from "../perf/probe";
 import { useIsMobile } from "../responsive";
 import { SCENE, useTheme } from "../theme";
 
@@ -99,7 +100,9 @@ function LogoModel(): JSX.Element {
         clone.emissiveIntensity = P.logoEmissive;
       }
       // The Z-exit fades the whole emblem out through the lens sweep.
-      clone.transparent = true;
+      // ?opaque=1 keeps them opaque (the emblem then does not fade out
+      // on the way past the lens - a deliberate visual change, perf only).
+      clone.transparent = !FLAGS.opaque;
       clones.set(source, clone);
     });
     return clones;
@@ -142,7 +145,7 @@ function LogoModel(): JSX.Element {
     };
   }, [gltf.scene, gltf.materials]);
 
-  useFrame((state, dt) => {
+  useFrame(timedFrame("frame:logo", (state, dt) => {
     const t = state.clock.elapsedTime;
     const reduced = motionState.reduced;
     const p = homeScroll.current;
@@ -190,7 +193,7 @@ function LogoModel(): JSX.Element {
     fadeMats.current.forEach((m) => {
       m.opacity = fade;
     });
-  });
+  }));
 
   return (
     <group ref={group}>

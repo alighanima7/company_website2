@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { COLLAR_CALLOUTS } from "../content";
 import { useLocale } from "../locale";
 import { clamp01, lerp, motionState, phase } from "../motion";
+import { FLAGS, timedFrame } from "../perf/probe";
 import { useIsMobile, viewport } from "../responsive";
 import { SCENE, useTheme } from "../theme";
 
@@ -145,7 +146,7 @@ export function Collar3D(): JSX.Element {
     });
   }, []);
 
-  useFrame((state, dt) => {
+  useFrame(timedFrame("frame:collar", (state, dt) => {
     const t = state.clock.elapsedTime;
     const reduced = motionState.reduced;
 
@@ -203,7 +204,7 @@ export function Collar3D(): JSX.Element {
         el.style.transform = `translateY(${String((1 - o) * 8)}px)`;
       }
     });
-  });
+  }));
 
   const calloutFor = (id: string | undefined, anchor?: readonly [number, number, number]): JSX.Element | null => {
     if (id === undefined || anchor === undefined) return null;
@@ -278,7 +279,7 @@ export function Collar3D(): JSX.Element {
             around the collar's bounding box — strap deep below, module far
             inline-right, buckle far inline-left, plate high above — so no
             chip covers the hardware or a neighboring chip. */}
-        {calloutsLive && calloutFor("strap", [0, -(BAND_H + 1.05), 0.7])}
+        {calloutsLive && !FLAGS.nohtml && calloutFor("strap", [0, -(BAND_H + 1.05), 0.7])}
 
         {/* ── Module (tracking unit on steel back-plate) ── */}
         <group
@@ -304,7 +305,7 @@ export function Collar3D(): JSX.Element {
           {/* Anchors are PART-local and the parts explode outward already —
               keep offsets modest or the chip swings past the viewport edge
               at the worst spinner yaw (radius cap ≈ 2.6 world units). */}
-          {calloutsLive && calloutFor("module", [0.1, 0.45, 0])}
+          {calloutsLive && !FLAGS.nohtml && calloutFor("module", [0.1, 0.45, 0])}
         </group>
 
         {/* ── Buckle (frame + prong + strap tongue) ── */}
@@ -333,7 +334,7 @@ export function Collar3D(): JSX.Element {
           </group>
           {/* Outside the buckle's silhouette; low enough to survive the
               part's upward explode without clipping the viewport top. */}
-          {calloutsLive && calloutFor("buckle", [-0.2, 0.58, 0])}
+          {calloutsLive && !FLAGS.nohtml && calloutFor("buckle", [-0.2, 0.58, 0])}
         </group>
 
         {/* ── Armor plates (±z) ── */}
@@ -351,7 +352,7 @@ export function Collar3D(): JSX.Element {
           {/* High above the collar's silhouette and pulled back toward the
               axis (the plate itself explodes to z≈1.95 — adding more z
               would blow the radius cap). */}
-          {calloutsLive && calloutFor("plate", [0.3, 1.3, -0.3])}
+          {calloutsLive && !FLAGS.nohtml && calloutFor("plate", [0.3, 1.3, -0.3])}
         </group>
         <group
           ref={(el) => {

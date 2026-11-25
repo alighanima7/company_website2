@@ -8,6 +8,7 @@ import { COPY, isVisibleProductId } from "../content";
 import { dampHomeScroll } from "../homeScroll";
 import { getLocale, useLocale } from "../locale";
 import { dampK, lerp, motionState, phase } from "../motion";
+import { FLAGS, PERF, timedFrame } from "../perf/probe";
 import { useProduct } from "../productState";
 import { useIsMobile, useViewportTier, viewport } from "../responsive";
 import type { ViewportTier } from "../responsive";
@@ -24,6 +25,10 @@ import { Tracker } from "./Tracker";
 
 /** Post stack loads on demand — touch devices never fetch its chunks. */
 const Effects = lazy(() => import("./Effects"));
+
+/** Renderer-counter probe. Lazy like Effects, and only ever rendered under
+ *  ?perf=1, so it is absent from a normal visitor's bundle AND graph. */
+const GlProbe = lazy(() => import("../perf/GlProbe"));
 
 /**
  * The persistent 3D stage: ONE fixed full-viewport canvas behind the DOM
@@ -102,7 +107,7 @@ function CameraRig(): null {
     persp.updateProjectionMatrix();
   }, [camera, fit.fov]);
 
-  useFrame((state, dt) => {
+  useFrame(timedFrame("frame:camera", (state, dt) => {
     const route = getRoute();
     const pose = POSES[route];
     TPOS.set(pose.pos[0], pose.pos[1], pose.pos[2]);
@@ -162,7 +167,7 @@ function CameraRig(): null {
     camera.position.copy(POS);
     camera.lookAt(LOOK);
     if (fit.tilt !== 0) camera.rotateX(fit.tilt);
-  });
+  }));
 
   return null;
 }
@@ -197,7 +202,10 @@ function StudioEnvironment(): null {
     scene.environmentIntensity = p.envIntensity;
     // The mobile rig dollies the camera further out — ease the exponential
     // fog so the far content (the Kingdom slab) stays as crisp as desktop.
-    scene.fog = new THREE.FogExp2(p.fog, p.fogDensity * (isMobile ? 0.72 : 1));
+    // ?nofog=1 isolates the transparent-overdraw cost the fog contributes.
+    scene.fog = FLAGS.nofog
+      ? null
+      : new THREE.FogExp2(p.fog, p.fogDensity * (isMobile ? 0.72 : 1));
   }, [gl, scene, mode, isMobile]);
 
   return null;
@@ -305,7 +313,9 @@ export function Stage(): JSX.Element {
   // PERF (mobile): cap the render resolution at 1.5× — full 2–3× retina
   // ratios melt phone GPUs for no visible gain at phone viewing distance.
   const dpr = useMemo<number | [number, number]>(
-    () => (isMobile ? Math.min(window.devicePixelRatio, 1.5) : ([1, 2] as [number, number])),
+    () =>
+      // ?dpr=1 pins 1x: isolates everything that scales with pixel count.
+      FLAGS.dpr1 ? 1 : isMobile ? Math.min(window.devicePixelRatio, 1.5) : ([1, 2] as [number, number]),
     [isMobile],
   );
 
@@ -318,9 +328,10 @@ export function Stage(): JSX.Element {
       <div className="stage" aria-hidden="true">
         <Canvas
           dpr={dpr}
-          shadows
+          shadows={!FLAGS.noshadows}
+          {...(FLAGS.demand ? ({ frameloop: "demand" } as const) : {})}
           camera={{ fov: 42, near: 0.1, far: 70, position: [0, 0.55, 7.6] }}
-          gl={{ antialias: true, powerPreference: "high-performance" }}
+          gl={{ antialias: !FLAGS.noaa, powerPreference: "high-performance" }}
           onCreated={({ gl }) => {
             gl.setClearColor(SCENE[getTheme()].canvas, 1);
           }}
@@ -337,7 +348,7 @@ export function Stage(): JSX.Element {
             position={[4, 6, 5]}
             intensity={p.keyIntensity}
             color={p.keyColor}
-            castShadow={p.shadows}
+            castShadow={p.shadows && !FLAGS.noshadows}
             shadow-mapSize={isMobile ? [512, 512] : [1024, 1024]}
             shadow-camera-left={-10}
             shadow-camera-right={10}
@@ -357,7 +368,7 @@ export function Stage(): JSX.Element {
           {/* Daylight grounding: an invisible catcher plane that renders ONLY
               the key light's shadow. (The glow pools play this role in the
               dark theme.) */}
-          {p.shadows && (
+          {p.shadows && !FLAGS.noshadows && (
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.615, 0]} receiveShadow>
               <planeGeometry args={[36, 36]} />
               <shadowMaterial transparent opacity={p.shadowOpacity} color={p.shadowColor} />
@@ -368,10 +379,17 @@ export function Stage(): JSX.Element {
 
           <ContextLossGuard onChange={onContextChange} />
 
-          {/* Post stack: lazy chunk, desktop-only (see Effects.tsx). */}
-          {effectsOn && (
+          {/* Post stack: lazy chunk, desktop-only (see Effects.tsx).
+              ?nofx=1 drops it (composer, 4x MSAA, half-float, bloom). */}
+          {effectsOn && !FLAGS.nofx && (
             <Suspense fallback={null}>
               <Effects />
+            </Suspense>
+          )}
+
+          {PERF && (
+            <Suspense fallback={null}>
+              <GlProbe />
             </Suspense>
           )}
         </Canvas>

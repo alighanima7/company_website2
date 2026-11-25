@@ -4,6 +4,7 @@ import type { CSSProperties, JSX } from "react";
 import { productKicker, PRODUCTS_PAGE, VISIBLE_PRODUCTS } from "../content";
 import { useLocale } from "../locale";
 import { motionState } from "../motion";
+import { timedCall } from "../perf/probe";
 import {
   attachBrowseScroll,
   attachProductScroll,
@@ -139,9 +140,9 @@ function ProductsBrowse(): JSX.Element {
     const el = root.current;
     if (el === null) return undefined;
 
-    const onScroll = (): void => {
+    const onScroll = timedCall("scroll:parkY", (): void => {
       browseScrollY = window.scrollY;
-    };
+    });
     window.addEventListener("scroll", onScroll, { passive: true });
     // Unmounting browse means a detail view is opening from here, so that
     // view may take focus.

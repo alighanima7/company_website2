@@ -5,6 +5,7 @@ import type { JSX } from "react";
 import * as THREE from "three";
 
 import { clamp01, motionState } from "../motion";
+import { timedFrame } from "../perf/probe";
 import { BROWSE_PEAK, dampProductScroll, productScroll, productTurn } from "../productScroll";
 import { applyBackDim, backDimScale, captureDimBase } from "./backDim";
 import { SCENE, useTheme } from "../theme";
@@ -158,7 +159,7 @@ function SimpleModel({ id }: { id: SimpleDeviceId }): JSX.Element {
     };
   }, [gltf.scene, gltf.materials, cfg.url]);
 
-  useFrame((state, dt) => {
+  useFrame(timedFrame("frame:simple", (state, dt) => {
     const t = state.clock.elapsedTime;
     const reduced = motionState.reduced;
 
@@ -192,7 +193,7 @@ function SimpleModel({ id }: { id: SimpleDeviceId }): JSX.Element {
       if (clone instanceof THREE.MeshStandardMaterial) clone.emissiveIntensity = 1 + 1.8 * s;
     });
     applyBackDim(dimBase, turn, SCENE[mode].canvas);
-  });
+  }));
 
   return (
     <group ref={group}>

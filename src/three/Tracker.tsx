@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { PART_CALLOUTS } from "../content";
 import { useLocale } from "../locale";
 import { clamp01, lerp, motionState, phase } from "../motion";
+import { FLAGS, timedFrame } from "../perf/probe";
 import { BROWSE_PEAK, dampProductScroll, productScroll, productTurn } from "../productScroll";
 import { applyBackDim, backDimScale, captureDimBase } from "./backDim";
 import { useIsMobile, useViewportTier } from "../responsive";
@@ -213,7 +214,7 @@ function TrackerModel(): JSX.Element {
     };
   }, [dotGeometry]);
 
-  useFrame((state, dt) => {
+  useFrame(timedFrame("frame:tracker", (state, dt) => {
     const t = state.clock.elapsedTime;
     const reduced = motionState.reduced;
 
@@ -294,7 +295,7 @@ function TrackerModel(): JSX.Element {
         el.style.transform = `translateY(${String((1 - o) * 8)}px)`;
       }
     });
-  });
+  }));
 
   const calloutFor = (spot: SpotSpec): JSX.Element | null => {
     const index = PART_CALLOUTS.findIndex((c) => c.id === spot.id);
@@ -345,7 +346,7 @@ function TrackerModel(): JSX.Element {
             geometry={dotGeometry}
             material={dotMaterial}
           />
-          {calloutsLive && calloutFor(spot)}
+          {calloutsLive && !FLAGS.nohtml && calloutFor(spot)}
         </group>
       ))}
     </group>

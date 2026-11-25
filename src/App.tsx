@@ -3,6 +3,7 @@ import type { JSX } from "react";
 
 import { PAGE_TITLES } from "./content";
 import { useLocale } from "./locale";
+import { FLAGS } from "./perf/probe";
 import { HomePage } from "./pages/HomePage";
 import { ProductsPage } from "./pages/ProductsPage";
 import { RequestsPage } from "./pages/RequestsPage";
@@ -46,9 +47,12 @@ export function App(): JSX.Element {
 
   return (
     <>
-      <SceneBoundary>
-        <Stage />
-      </SceneBoundary>
+      {/* ?nocanvas=1 drops the whole 3D layer - the harness baseline. */}
+      {!FLAGS.nocanvas && (
+        <SceneBoundary>
+          <Stage />
+        </SceneBoundary>
+      )}
       <TopNav />
       <main id="main" tabIndex={-1}>
         {route === "home" && <HomePage />}

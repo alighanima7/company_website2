@@ -8,7 +8,8 @@ import { FMC130_CALLOUTS, FMC920_CALLOUTS, GALILEOSKY_CALLOUTS } from "../conten
 import type { PartCallout } from "../content";
 import { getLocale, useLocale } from "../locale";
 import { lerp, motionState, phase } from "../motion";
-import { dampProductScroll } from "../productScroll";
+import { dampProductScroll, productScroll, productTurn } from "../productScroll";
+import { applyBackDim, backDimScale, captureDimBase } from "./backDim";
 import { useIsMobile, useViewportTier } from "../responsive";
 import { SCENE, useTheme } from "../theme";
 
@@ -372,6 +373,8 @@ function FmcModel({ id, showChips }: { id: FmcId; showChips: boolean }): JSX.Ele
     return clones;
   }, [originals, mode]);
 
+  const dimBase = useMemo(() => captureDimBase(themed.values()), [themed]);
+
   useEffect(() => {
     originals.forEach((source, mesh) => {
       const clone = themed.get(source);
@@ -438,6 +441,9 @@ function FmcModel({ id, showChips }: { id: FmcId; showChips: boolean }): JSX.Ele
       p.node.position[EXPLODE_AXIS] += p.offset * k;
     }
 
+    // Browse revolution (0 in detail mode, which keeps openYaw alone).
+    const turnForDim = productScroll.driven && productScroll.turn > 0 ? productTurn() : 0;
+
     const g = group.current;
     if (g !== null) {
       // Presentation turn: assembled faces the viewer dead-on; as the
@@ -445,19 +451,42 @@ function FmcModel({ id, showChips }: { id: FmcId; showChips: boolean }): JSX.Ele
       // Z-spread across the screen so the separation reads as depth
       // instead of scale. Idle float keeps held frames alive.
       const open = phase(explode, 0.04, 0.78);
-      const float = reduced ? 0 : Math.sin(t * 0.9) * 0.05;
-      const sway = reduced ? 0 : Math.sin(t * 0.4) * 0.05 * (1 - open);
+      // In BROWSE the scroll already supplies a strong, deliberate motion.
+      // The clock idles are damped right down there: they ran on periods
+      // (7.0s / 15.7s) that share no common multiple with each other, so
+      // the composite never repeated and the model read as restless. The
+      // sway is dropped outright — it was scaled by (1 - open), i.e.
+      // LOUDEST at the segment boundary, exactly where the scene swaps.
+      // Detail mode keeps both at their original amplitude.
+      const idle = productScroll.driven ? 0.35 : 1;
+      const float = reduced ? 0 : Math.sin(t * 0.9) * 0.05 * idle;
+      const sway = reduced || productScroll.driven ? 0 : Math.sin(t * 0.4) * 0.05 * (1 - open);
       g.scale.setScalar(
-        Math.max(0.001, lerp(0.6, 1, inE) * lerp(1, cfg.explodedScale, phase(explode, 0.2, 0.9))),
+        Math.max(
+          0.001,
+          lerp(0.6, 1, inE) *
+            lerp(1, cfg.explodedScale, phase(explode, 0.2, 0.9)) *
+            backDimScale(turnForDim),
+        ),
       );
       g.position.set(0, 0.15 + 0.12 * open + float - (1 - inE) * 1.6, 0);
       // The camera rig mirrors its pose for LTR — mirror the opening turn
       // with it, so the Z-spread swings ACROSS the screen in both locales
       // instead of stacking into the view axis on one of them.
       const mx = getLocale() === "en" ? -1 : 1;
-      g.rotation.y = (cfg.baseYaw ?? 0) + mx * (cfg.openYaw * open + (1 - inE) * 0.9) + sway;
-      g.rotation.x = reduced ? 0 : Math.sin(t * 0.5) * 0.03 + 0.15 * open;
+      // BROWSE: one full revolution driven by raw scroll progress —
+      // monotonic, eased to a stop at both ends, and (by YAW_HOLD_WINDOW)
+      // nearly stationary exactly where the parts are furthest apart, so
+      // the teardown is never read off a spinning body. The locale mirror
+      // is deliberately NOT applied to it: the camera trucks sideways but
+      // stays on +Z, so the same face sequence must play in both locales.
+      // DETAIL: the original openYaw presentation turn, untouched.
+      g.rotation.y =
+        (cfg.baseYaw ?? 0) + turnForDim + mx * (cfg.openYaw * open + (1 - inE) * 0.9) + sway;
+      g.rotation.x = (reduced ? 0 : Math.sin(t * 0.5) * 0.03 * idle) + 0.15 * open;
     }
+
+    applyBackDim(dimBase, turnForDim, SCENE[mode].canvas);
 
     // Chips fade in across the last stretch of the opening, one after
     // another, and back out in reverse on the way down.

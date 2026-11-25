@@ -7,7 +7,8 @@ import * as THREE from "three";
 import { PART_CALLOUTS } from "../content";
 import { useLocale } from "../locale";
 import { clamp01, lerp, motionState, phase } from "../motion";
-import { BROWSE_PEAK, dampProductScroll, productScroll } from "../productScroll";
+import { BROWSE_PEAK, dampProductScroll, productScroll, productTurn } from "../productScroll";
+import { applyBackDim, backDimScale, captureDimBase } from "./backDim";
 import { useIsMobile, useViewportTier } from "../responsive";
 import { SCENE, useTheme } from "../theme";
 
@@ -33,10 +34,6 @@ const MODEL_URL = "/models/tracker.glb";
  *  world units — the framing contract every stage pose and callout radius
  *  is authored against. */
 const TRACKER_SPAN = 2.5;
-
-/** Browse yaw sweep at the peak, radians (~80°): enough to read the unit
- *  as a 3D object, short of a full turn so it returns square for the swap. */
-const SCRUB_SWEEP = 1.4;
 
 /** Inspection cycle period (seconds): wave 0 presents, hands off to wave 1,
  *  then a beat of rest before the cycle repeats. */
@@ -152,6 +149,8 @@ function TrackerModel(): JSX.Element {
     return clones;
   }, [originals, mode]);
 
+  const dimBase = useMemo(() => captureDimBase(themed.values()), [themed]);
+
   useEffect(() => {
     originals.forEach((source, mesh) => {
       const clone = themed.get(source);
@@ -232,6 +231,7 @@ function TrackerModel(): JSX.Element {
     // BROWSE_PEAK and that is the only scroll range this scene ever sees.
     const scrub = productScroll.driven && !reduced;
     const s = scrub ? clamp01(dampProductScroll(dt) / BROWSE_PEAK) : 0;
+    const turn = scrub ? productTurn() : 0;
 
     // Inspection: two chip waves. SCRUBBED they are driven by scroll
     // position (wave 0 opens on the way in, wave 1 near the peak) so the
@@ -257,17 +257,22 @@ function TrackerModel(): JSX.Element {
     const g = group.current;
     if (g !== null) {
       g.visible = true;
-      g.scale.setScalar(Math.max(0.001, lerp(0.6, 1, inE) * (1 + 0.07 * inspect)));
-      const float = reduced ? 0 : Math.sin(t * 0.9) * 0.05;
+      g.scale.setScalar(
+        Math.max(0.001, lerp(0.6, 1, inE) * (1 + 0.07 * inspect) * backDimScale(turn)),
+      );
+      const idle = scrub ? 0.35 : 1;
+      const float = reduced ? 0 : Math.sin(t * 0.9) * 0.05 * idle;
       g.position.set(0, 0.15 + 0.18 * inspect + float - (1 - inE) * 1.6, 0);
-      // Scrubbed: a bounded yaw SWEEP that returns to front-on at both
-      // ends of the segment, so the scene swap always lands square.
-      // Otherwise the continuous presentation turn, as before. Reduced
-      // motion now holds still rather than drifting.
-      const yaw = scrub ? SCRUB_SWEEP * inspect : reduced ? 0 : t * 0.16;
+      // Scrubbed: ONE full revolution, monotonic and eased to a stop at
+      // both ends, so the swap always lands square-on and the eye is
+      // never asked to follow a direction reversal. Otherwise the
+      // continuous presentation turn. Reduced motion holds still.
+      const yaw = scrub ? turn : reduced ? 0 : t * 0.16;
       g.rotation.y = yaw + (1 - inE) * 0.9;
-      g.rotation.x = (reduced ? 0 : Math.sin(t * 0.5) * 0.04) + inspect * 0.14;
+      g.rotation.x = (reduced ? 0 : Math.sin(t * 0.5) * 0.04 * idle) + inspect * 0.14;
     }
+
+    applyBackDim(dimBase, turn, SCENE[mode].canvas);
 
     const waveOpacity: readonly [number, number] = [wave0, wave1];
 

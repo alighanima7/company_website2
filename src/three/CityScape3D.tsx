@@ -8,7 +8,7 @@ import type { Line2, LineSegments2 } from "three-stdlib";
 import { CITY_CALLOUTS } from "../content";
 import { useLocale } from "../locale";
 import { clamp01, lerp, motionState, phase } from "../motion";
-import { BROWSE_PEAK, dampProductScroll, productScroll } from "../productScroll";
+import { BROWSE_PEAK, dampProductScroll, productScroll, productTurn } from "../productScroll";
 import { useIsMobile } from "../responsive";
 import { SCENE, useTheme } from "../theme";
 
@@ -34,10 +34,6 @@ import { SCENE, useTheme } from "../theme";
  */
 
 const PLATFORM_R = 2.3;
-
-/** Browse yaw sweep at the peak, radians (~69°). Bounded so the district
- *  returns to the same orientation at both ends of the segment. */
-const SCRUB_SWEEP = 1.2;
 
 /** Callout carousel period (seconds) — four pillars per revolution. */
 const CYCLE = 16;
@@ -207,10 +203,13 @@ export function CityScape3D(): JSX.Element {
     }
     const sp = spinner.current;
     if (sp !== null) {
-      // Scrubbed: a bounded sweep that returns square at both ends, so the
-      // scene swap always lands on the same orientation. Otherwise the
-      // slow presentation spin. Reduced motion now holds still.
-      sp.rotation.y = scrub ? SCRUB_SWEEP * s : reduced ? 0 : t * 0.08;
+      // Scrubbed: ONE full revolution of the district, monotonic and eased
+      // to a stop at both ends, so the swap always lands on the same
+      // orientation. A district has no "front" and its callouts are
+      // anchored to clear the model at EVERY yaw, so a full turn is the
+      // natural reading here — and there is no texture to mirror.
+      // Otherwise the slow presentation spin. Reduced motion holds still.
+      sp.rotation.y = scrub ? productTurn() : reduced ? 0 : t * 0.08;
     }
 
     // Management ring: spins up with the build, then breathes.

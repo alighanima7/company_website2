@@ -5,7 +5,8 @@ import type { JSX } from "react";
 import * as THREE from "three";
 
 import { clamp01, motionState } from "../motion";
-import { BROWSE_PEAK, dampProductScroll, productScroll } from "../productScroll";
+import { BROWSE_PEAK, dampProductScroll, productScroll, productTurn } from "../productScroll";
+import { applyBackDim, backDimScale, captureDimBase } from "./backDim";
 import { SCENE, useTheme } from "../theme";
 import { StageGlow } from "./FmcDevice";
 
@@ -19,9 +20,11 @@ import { StageGlow } from "./FmcDevice";
  * same theme-driven stage halo the FMC viewer uses.
  *
  * Two modes, decided by whether a scroll driver is attached:
- *  · BROWSE — scrubbed by the segment track. A bounded yaw sweep (never
- *    past profile, so the branded face never reads mirrored), a small
- *    lift and dolly, and the indicator strip brightening toward the peak.
+ *  · BROWSE — scrubbed by the segment track: ONE full revolution,
+ *    monotonic and eased to a stop at both ends, plus a small lift and
+ *    dolly and the indicator strip brightening toward the peak. The back
+ *    face carries mirrored branding baked into the texture, so it fades
+ *    toward the stage colour as it passes (see backDim).
  *  · DETAIL — no runway exists for a single-mesh product, so it falls
  *    back to the slow idle turn and stays a plain document.
  *
@@ -29,10 +32,6 @@ import { StageGlow } from "./FmcDevice";
  * contracts exactly, so switching between the two viewers leaves no GPU
  * resources behind.
  */
-
-/** Bounded yaw sweep at the browse peak, radians (~34°). Deliberately
- *  short of profile: this model carries its branding on one face. */
-const SWEEP = 0.6;
 
 export type SimpleDeviceId = "galileosky10";
 
@@ -121,6 +120,8 @@ function SimpleModel({ id }: { id: SimpleDeviceId }): JSX.Element {
     return clones;
   }, [originals, mode]);
 
+  const dimBase = useMemo(() => captureDimBase(themed.values()), [themed]);
+
   useEffect(() => {
     originals.forEach((source, mesh) => {
       const clone = themed.get(source);
@@ -173,20 +174,24 @@ function SimpleModel({ id }: { id: SimpleDeviceId }): JSX.Element {
     const g = group.current;
     if (g === null) return;
 
-    const float = reduced ? 0 : Math.sin(t * 0.9) * 0.05;
-    // Scrubbed: a bounded sweep to ONE side and back, so the branded face
-    // never rotates past profile and never reads mirrored. Unscrubbed (and
-    // not reduced): the slow idle turn. Reduced motion: dead still.
-    const yaw = scrub ? SWEEP * s : reduced ? 0 : t * cfg.spin;
-    g.scale.setScalar(Math.max(0.001, lerpIn(inE) * (1 + 0.06 * s)));
+    const idle = scrub ? 0.35 : 1;
+    const float = reduced ? 0 : Math.sin(t * 0.9) * 0.05 * idle;
+    // Scrubbed: ONE full revolution across the segment, monotonic, eased
+    // to a stop at both ends so the swap lands square-on. This model's
+    // back carries mirrored branding baked into its texture, so the dim
+    // below hides it as it passes. Unscrubbed: the slow idle turn.
+    const turn = scrub ? productTurn() : 0;
+    const yaw = scrub ? turn : reduced ? 0 : t * cfg.spin;
+    g.scale.setScalar(Math.max(0.001, lerpIn(inE) * (1 + 0.06 * s) * backDimScale(turn)));
     g.position.set(0, 0.15 + 0.1 * s + float - (1 - inE) * 1.6, 0);
     g.rotation.y = cfg.baseYaw + yaw + (1 - inE) * 0.9;
-    g.rotation.x = (reduced ? 0 : Math.sin(t * 0.5) * 0.04) + 0.1 * s;
+    g.rotation.x = (reduced ? 0 : Math.sin(t * 0.5) * 0.04 * idle) + 0.1 * s;
 
     // Indicator strip lifts toward the peak — the device "wakes up".
     themed.forEach((clone) => {
       if (clone instanceof THREE.MeshStandardMaterial) clone.emissiveIntensity = 1 + 1.8 * s;
     });
+    applyBackDim(dimBase, turn, SCENE[mode].canvas);
   });
 
   return (

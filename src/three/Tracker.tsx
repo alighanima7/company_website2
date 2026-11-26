@@ -6,10 +6,9 @@ import * as THREE from "three";
 
 import { PART_CALLOUTS } from "../content";
 import { useLocale } from "../locale";
-import { clamp01, lerp, motionState, phase } from "../motion";
+import { lerp, motionState, phase } from "../motion";
 import { FLAGS, timedFrame } from "../perf/probe";
-import { BROWSE_PEAK, dampProductScroll, productScroll, productTurn } from "../productScroll";
-import { applyBackDim, backDimScale, captureDimBase } from "./backDim";
+import { markStageLoading, markStageReady, showroomState } from "../showroom";
 import { useIsMobile, useViewportTier } from "../responsive";
 import { SCENE, useTheme } from "../theme";
 
@@ -40,9 +39,18 @@ const TRACKER_SPAN = 2.5;
  *  then a beat of rest before the cycle repeats. */
 const CYCLE = 11;
 
-// Start the fetch at module-eval time. Draco OFF (its decoder lives on a
-// CDN), meshopt ON (decoder bundled in three-stdlib).
-useGLTF.preload(MODEL_URL, false, true);
+/** Warm the tracker GLB (showroom neighbor prefetch; Draco OFF — its
+ *  decoder lives on a CDN — meshopt ON, decoder bundled in three-stdlib).
+ *  Deliberately NOT called at module scope: that made every route fetch
+ *  2.5 MB it might never render. */
+export function preloadTracker(): void {
+  useGLTF.preload(MODEL_URL, false, true);
+}
+
+/** Evict the loader-cache entry (showroom's far-neighbor cleanup). */
+export function clearTracker(): void {
+  useGLTF.clear(MODEL_URL);
+}
 
 interface SpotSpec {
   /** PART_CALLOUTS id this spot narrates. */
@@ -99,6 +107,14 @@ function TrackerModel(): JSX.Element {
 
   const gltf = useGLTF(MODEL_URL, false, true);
 
+  // Showroom poster crossfade: mounting here means the GLB is decoded.
+  useEffect(() => {
+    markStageReady();
+    return () => {
+      markStageLoading();
+    };
+  }, []);
+
   // ── Auto-centering + scale normalization (Box3 on mount) ──────────────
   const norm = useMemo(() => {
     const box = new THREE.Box3().setFromObject(gltf.scene);
@@ -149,8 +165,6 @@ function TrackerModel(): JSX.Element {
     });
     return clones;
   }, [originals, mode]);
-
-  const dimBase = useMemo(() => captureDimBase(themed.values()), [themed]);
 
   useEffect(() => {
     originals.forEach((source, mesh) => {
@@ -227,53 +241,29 @@ function TrackerModel(): JSX.Element {
       setCalloutsLive(live);
     }
 
-    // Browse scrubs this scene; detail mode (no runway for this product)
-    // leaves it on the clock. Normalized because browse caps at
-    // BROWSE_PEAK and that is the only scroll range this scene ever sees.
-    const scrub = productScroll.driven && !reduced;
-    const s = scrub ? clamp01(dampProductScroll(dt) / BROWSE_PEAK) : 0;
-    const turn = scrub ? productTurn() : 0;
-
-    // Inspection: two chip waves. SCRUBBED they are driven by scroll
-    // position (wave 0 opens on the way in, wave 1 near the peak) so the
-    // reveal is deterministic and reverses exactly; otherwise they run on
-    // the clock cycle as before.
-    const cyc = scrub ? s : reduced ? 0 : ((t % CYCLE) + CYCLE) % CYCLE / CYCLE;
-    // The two waves must stay MUTUALLY EXCLUSIVE: three chips per wave fit
-    // the vertical safe band, six at once do not. Scrubbed, wave 0 opens
-    // on the way in and closes before wave 1 takes the peak — and because
-    // `s` rises then falls, the sequence reads 0 → 1 → 0 across the track.
-    const wave0 = live
-      ? scrub
-        ? phase(s, 0.15, 0.4) * (1 - phase(s, 0.55, 0.75))
-        : phase(cyc, 0.08, 0.16) * (1 - phase(cyc, 0.4, 0.48))
-      : 0;
-    const wave1 = live
-      ? scrub
-        ? phase(s, 0.72, 0.88)
-        : phase(cyc, 0.52, 0.6) * (1 - phase(cyc, 0.86, 0.94))
-      : 0;
-    const inspect = scrub ? s : Math.min(1, wave0 + wave1);
+    // Inspection: two chip waves on the clock cycle — wave 0 presents,
+    // hands off to wave 1, then a beat of rest before the cycle repeats.
+    // The two waves stay MUTUALLY EXCLUSIVE: three chips per wave fit the
+    // vertical safe band, six at once do not.
+    const cyc = reduced ? 0 : ((t % CYCLE) + CYCLE) % CYCLE / CYCLE;
+    const wave0 = live ? phase(cyc, 0.08, 0.16) * (1 - phase(cyc, 0.4, 0.48)) : 0;
+    const wave1 = live ? phase(cyc, 0.52, 0.6) * (1 - phase(cyc, 0.86, 0.94)) : 0;
+    const inspect = Math.min(1, wave0 + wave1);
 
     const g = group.current;
     if (g !== null) {
       g.visible = true;
-      g.scale.setScalar(
-        Math.max(0.001, lerp(0.6, 1, inE) * (1 + 0.07 * inspect) * backDimScale(turn)),
-      );
-      const idle = scrub ? 0.35 : 1;
-      const float = reduced ? 0 : Math.sin(t * 0.9) * 0.05 * idle;
+      g.scale.setScalar(Math.max(0.001, lerp(0.6, 1, inE) * (1 + 0.07 * inspect)));
+      const float = reduced ? 0 : Math.sin(t * 0.9) * 0.05;
       g.position.set(0, 0.15 + 0.18 * inspect + float - (1 - inE) * 1.6, 0);
-      // Scrubbed: ONE full revolution, monotonic and eased to a stop at
-      // both ends, so the swap always lands square-on and the eye is
-      // never asked to follow a direction reversal. Otherwise the
-      // continuous presentation turn. Reduced motion holds still.
-      const yaw = scrub ? turn : reduced ? 0 : t * 0.16;
+      // In the SHOWROOM the rig parent owns yaw (user drag + gated sway) —
+      // the clock turn would spin under the user's finger. Elsewhere
+      // (detail view, which has no runway for this product) the continuous
+      // presentation turn plays. Reduced motion holds still.
+      const yaw = showroomState.active || reduced ? 0 : t * 0.16;
       g.rotation.y = yaw + (1 - inE) * 0.9;
-      g.rotation.x = (reduced ? 0 : Math.sin(t * 0.5) * 0.04 * idle) + inspect * 0.14;
+      g.rotation.x = (reduced ? 0 : Math.sin(t * 0.5) * 0.04) + inspect * 0.14;
     }
-
-    applyBackDim(dimBase, turn, SCENE[mode].canvas);
 
     const waveOpacity: readonly [number, number] = [wave0, wave1];
 

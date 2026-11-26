@@ -9,17 +9,20 @@ import { dampHomeScroll } from "../homeScroll";
 import { getLocale, useLocale } from "../locale";
 import { dampK, lerp, motionState, phase } from "../motion";
 import { FLAGS, PERF, timedFrame } from "../perf/probe";
+import { POSTER } from "../poster/flag";
 import { useProduct } from "../productState";
 import { useIsMobile, useViewportTier, viewport } from "../responsive";
 import type { ViewportTier } from "../responsive";
 import { getRoute, useProductParam, useRoute } from "../router";
 import type { Route } from "../router";
+import { showroomState, useShowroomExplode } from "../showroom";
 import { getTheme, SCENE, useTheme } from "../theme";
 import { CityScape3D } from "./CityScape3D";
 import { Collar3D } from "./Collar3D";
 import { FmcDevice } from "./FmcDevice";
 import { KsaMap3D } from "./KsaMap3D";
 import { Logo3D } from "./Logo3D";
+import { ShowroomRig } from "./ShowroomRig";
 import { SimpleDevice } from "./SimpleDevice";
 import { Tracker } from "./Tracker";
 
@@ -86,8 +89,13 @@ function fitFor(tier: ViewportTier, width: number, height: number): FrameFit {
     return { fov: 54, dolly: 1.02 * narrow, sideX: 0, tilt: -0.23 };
   }
   const slim = Math.min(2, Math.max(1, 1.6 / aspect));
-  if (tier === "tablet") return { fov: 46, dolly: 1.04 * slim, sideX: 1, tilt: -0.04 };
-  return { fov: 42, dolly: slim, sideX: 1, tilt: 0 };
+  // Short-landscape guard (phone-landscape / split-view heights): wide
+  // aspects defeat `slim`, and the widest scene (the city district) can
+  // ride up under the top nav pill. Dolly out as height shrinks below
+  // 520px — ordinary desktop/tablet heights multiply by exactly 1.
+  const short = Math.min(1.5, Math.max(1, 560 / Math.max(1, height)));
+  if (tier === "tablet") return { fov: 46, dolly: 1.04 * slim * short, sideX: 1, tilt: -0.04 };
+  return { fov: 42, dolly: slim * short, sideX: 1, tilt: 0 };
 }
 
 const POS = new THREE.Vector3(0, 0.55, 7.6);
@@ -132,7 +140,10 @@ function CameraRig(): null {
     TLOOK.x *= mx;
 
     // True dolly along the view axis — authored angles survive re-framing.
-    TPOS.sub(TLOOK).multiplyScalar(fit.dolly).add(TLOOK);
+    // The showroom's wheel/pinch zoom divides the distance (zoom 1 means
+    // the authored pose; the rig damps the factor, inactive routes read 1).
+    const zoom = showroomState.active ? showroomState.zoom : 1;
+    TPOS.sub(TLOOK).multiplyScalar(fit.dolly / zoom).add(TLOOK);
 
     // Strict-zoning truck: slide camera AND target laterally so the
     // route's model anchor projects at exactly MODEL_NDC — exact for
@@ -194,7 +205,9 @@ function StudioEnvironment(): null {
 
   useEffect(() => {
     const p = SCENE[mode];
-    gl.setClearColor(p.canvas, 1);
+    // Poster capture renders the model over TRANSPARENCY — the webp keeps
+    // its alpha and the poster works on either page background.
+    gl.setClearColor(p.canvas, POSTER.on ? 0 : 1);
     // ACES filmic keeps metals and emissives in range; daylight runs a
     // hotter exposure so the alloy stays punchy instead of washing flat.
     gl.toneMapping = THREE.ACESFilmicToneMapping;
@@ -254,8 +267,9 @@ function DevGlInfo(): null {
 function RouteScene(): JSX.Element | null {
   const route = useRoute();
   const product = useProduct();
-  // A product segment in the URL means detail mode; null means browse.
+  // A product segment in the URL means detail mode; null means showroom.
   const inDetail = useProductParam() !== null;
+  const explodeOn = useShowroomExplode();
 
   if (route === "home") {
     return (
@@ -270,15 +284,33 @@ function RouteScene(): JSX.Element | null {
     // still names it. The router already refuses its URL; this is the
     // second gate, on the canvas side.
     if (!isVisibleProductId(product)) return null;
-    if (product === "collar") return <Collar3D />;
-    if (product === "city") return <CityScape3D />;
-    if (product === "galileosky10") return <SimpleDevice id={product} />;
-    if (product === "fmc130" || product === "fmc920" || product === "galileosky") {
-      // Browse (no product segment in the URL) runs the teardown as a
-      // fast teaser with no part chips; detail mode keeps them.
-      return <FmcDevice id={product} showChips={inDetail} />;
-    }
-    return <Tracker />;
+    // Key in SHOWROOM mode: each selection remounts its scene, so the
+    // entrance plays per product and the poster/ready cycle restarts.
+    // Detail keeps today's unkeyed behavior exactly.
+    const key = inDetail ? undefined : product;
+    let scene: JSX.Element;
+    if (product === "collar") scene = <Collar3D key={key} />;
+    else if (product === "city") scene = <CityScape3D key={key} />;
+    else if (product === "galileosky10")
+      scene = <SimpleDevice key={key} id={product} stageGlow={inDetail} />;
+    else if (product === "fmc130" || product === "fmc920" || product === "galileosky") {
+      // Detail: chips + in-scene glow, explode from the runway scrub.
+      // Showroom: no chips (the rig's borderless label system narrates),
+      // no in-scene glow (the rig's camera-facing halo replaces it), and
+      // the explode target follows the text toggle.
+      scene = inDetail ? (
+        <FmcDevice id={product} showChips />
+      ) : (
+        <FmcDevice
+          key={key}
+          id={product}
+          showChips={false}
+          stageGlow={false}
+          explode={explodeOn ? 1 : 0}
+        />
+      );
+    } else scene = <Tracker key={key} />;
+    return inDetail ? scene : <ShowroomRig>{scene}</ShowroomRig>;
   }
   return null;
 }
@@ -331,9 +363,15 @@ export function Stage(): JSX.Element {
           shadows={!FLAGS.noshadows}
           {...(FLAGS.demand ? ({ frameloop: "demand" } as const) : {})}
           camera={{ fov: 42, near: 0.1, far: 70, position: [0, 0.55, 7.6] }}
-          gl={{ antialias: !FLAGS.noaa, powerPreference: "high-performance" }}
+          gl={{
+            antialias: !FLAGS.noaa,
+            powerPreference: "high-performance",
+            // Poster capture needs a transparent drawing buffer. Normal
+            // visitors keep the opaque buffer (cheaper compositing).
+            ...(POSTER.on ? { alpha: true } : {}),
+          }}
           onCreated={({ gl }) => {
-            gl.setClearColor(SCENE[getTheme()].canvas, 1);
+            gl.setClearColor(SCENE[getTheme()].canvas, POSTER.on ? 0 : 1);
           }}
         >
           <StudioEnvironment />
@@ -381,7 +419,7 @@ export function Stage(): JSX.Element {
 
           {/* Post stack: lazy chunk, desktop-only (see Effects.tsx).
               ?nofx=1 drops it (composer, 4x MSAA, half-float, bloom). */}
-          {effectsOn && !FLAGS.nofx && (
+          {effectsOn && !FLAGS.nofx && !POSTER.on && (
             <Suspense fallback={null}>
               <Effects />
             </Suspense>

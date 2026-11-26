@@ -174,6 +174,12 @@ export interface MeasureApi {
   bounds(): BoundsReport;
   /** Camera/renderer/viewport facts behind the current framing. */
   info(): Record<string, unknown>;
+  /** Euler rotations (rad) of every rotated Group in the scene — the
+   *  audit's roll check (z must stay 0 at rest for product scenes). */
+  rolls(): Array<{ name: string; x: number; y: number; z: number }>;
+  /** Raw R3F root state — scene-graph access for audit-time elimination
+   *  (hiding one object at a time to locate a visual artifact). */
+  root: RootState;
 }
 
 let clockMs = 0;
@@ -199,11 +205,22 @@ export function installMeasureApi(state: RootState): () => void {
     snap() {
       homeScroll.current = homeScroll.target;
       productScroll.current = productScroll.target;
-      productScroll.turnCurrent = productScroll.turn;
     },
     bounds() {
       return bounds(state);
     },
+    rolls() {
+      const out: Array<{ name: string; x: number; y: number; z: number }> = [];
+      state.scene.traverse((obj) => {
+        if ((obj as THREE.Group).isGroup !== true && (obj as THREE.Mesh).isMesh !== true) return;
+        const r = obj.rotation;
+        if (r.x !== 0 || r.y !== 0 || r.z !== 0) {
+          out.push({ name: obj.name || obj.type, x: +r.x.toFixed(4), y: +r.y.toFixed(4), z: +r.z.toFixed(4) });
+        }
+      });
+      return out;
+    },
+    root: state,
     info() {
       const cam = state.camera as THREE.PerspectiveCamera;
       return {
@@ -219,7 +236,6 @@ export function installMeasureApi(state: RootState): () => void {
         dpr: state.viewport.dpr,
         scrollTarget: productScroll.target,
         scrollCurrent: productScroll.current,
-        turn: productScroll.turn,
         driven: productScroll.driven,
       };
     },

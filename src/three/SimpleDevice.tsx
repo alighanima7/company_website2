@@ -4,10 +4,9 @@ import { Suspense, useEffect, useMemo, useRef } from "react";
 import type { JSX } from "react";
 import * as THREE from "three";
 
-import { clamp01, motionState } from "../motion";
+import { motionState } from "../motion";
 import { timedFrame } from "../perf/probe";
-import { BROWSE_PEAK, dampProductScroll, productScroll, productTurn } from "../productScroll";
-import { applyBackDim, backDimScale, captureDimBase } from "./backDim";
+import { markStageLoading, markStageReady, showroomState } from "../showroom";
 import { SCENE, useTheme } from "../theme";
 import { StageGlow } from "./FmcDevice";
 
@@ -20,14 +19,9 @@ import { StageGlow } from "./FmcDevice";
  * one: it centers and scale-normalizes the model and lights it with the
  * same theme-driven stage halo the FMC viewer uses.
  *
- * Two modes, decided by whether a scroll driver is attached:
- *  · BROWSE — scrubbed by the segment track: ONE full revolution,
- *    monotonic and eased to a stop at both ends, plus a small lift and
- *    dolly and the indicator strip brightening toward the peak. The back
- *    face carries mirrored branding baked into the texture, so it fades
- *    toward the stage colour as it passes (see backDim).
- *  · DETAIL — no runway exists for a single-mesh product, so it falls
- *    back to the slow idle turn and stays a plain document.
+ * In the SHOWROOM the rig parent owns all yaw (user drag + gated sway),
+ * so this scene contributes none of its own; in DETAIL (a plain document —
+ * no runway exists for a single-mesh product) it keeps the slow idle turn.
  *
  * Normalization, theme tinting and unmount disposal mirror FmcDevice's
  * contracts exactly, so switching between the two viewers leaves no GPU
@@ -63,17 +57,31 @@ const CONFIGS: Record<SimpleDeviceId, SimpleConfig> = {
   },
 };
 
-/** Warm one GLB ahead of its segment, same contract as preloadFmc. */
+/** Warm one GLB ahead of selection, same contract as preloadFmc. */
 export function preloadSimple(id: SimpleDeviceId): void {
   useGLTF.preload(CONFIGS[id].url, false, true);
 }
 
-export function SimpleDevice({ id }: { id: SimpleDeviceId }): JSX.Element {
+/** Evict the loader-cache entry (showroom's far-neighbor cleanup). */
+export function clearSimple(id: SimpleDeviceId): void {
+  useGLTF.clear(CONFIGS[id].url);
+}
+
+export function SimpleDevice({
+  id,
+  stageGlow = true,
+}: {
+  id: SimpleDeviceId;
+  /** Detail keeps the in-scene glow; the SHOWROOM passes false (oblique
+   *  view + rig rotation turn the disc into a diagonal beam — the rig
+   *  owns a camera-facing halo instead). */
+  stageGlow?: boolean;
+}): JSX.Element {
   const mode = useTheme();
   const glow = SCENE[mode].stageGlow;
   return (
     <Suspense fallback={null}>
-      {glow !== null && <StageGlow color={glow} />}
+      {stageGlow && glow !== null && <StageGlow color={glow} />}
       <SimpleModel id={id} />
     </Suspense>
   );
@@ -86,6 +94,14 @@ function SimpleModel({ id }: { id: SimpleDeviceId }): JSX.Element {
   const mode = useTheme();
 
   const gltf = useGLTF(cfg.url, false, true);
+
+  // Showroom poster crossfade: mounting here means the GLB is decoded.
+  useEffect(() => {
+    markStageReady();
+    return () => {
+      markStageLoading();
+    };
+  }, [id]);
 
   // ── Auto-centering + scale normalization (Box3 on mount) ──────────────
   const norm = useMemo(() => {
@@ -120,8 +136,6 @@ function SimpleModel({ id }: { id: SimpleDeviceId }): JSX.Element {
     });
     return clones;
   }, [originals, mode]);
-
-  const dimBase = useMemo(() => captureDimBase(themed.values()), [themed]);
 
   useEffect(() => {
     originals.forEach((source, mesh) => {
@@ -166,33 +180,18 @@ function SimpleModel({ id }: { id: SimpleDeviceId }): JSX.Element {
     entrance.current = Math.min(1, entrance.current + dt * 0.55);
     const inE = 1 - Math.pow(1 - entrance.current, 3);
 
-    // Browse is this scene's only scroll driver (it has no detail runway),
-    // so the incoming range is 0..BROWSE_PEAK — normalize it to a clean
-    // 0→1→0 sweep. Without a driver it falls back to the idle turn.
-    const scrub = productScroll.driven && !reduced;
-    const s = scrub ? clamp01(dampProductScroll(dt) / BROWSE_PEAK) : 0;
-
     const g = group.current;
     if (g === null) return;
 
-    const idle = scrub ? 0.35 : 1;
-    const float = reduced ? 0 : Math.sin(t * 0.9) * 0.05 * idle;
-    // Scrubbed: ONE full revolution across the segment, monotonic, eased
-    // to a stop at both ends so the swap lands square-on. This model's
-    // back carries mirrored branding baked into its texture, so the dim
-    // below hides it as it passes. Unscrubbed: the slow idle turn.
-    const turn = scrub ? productTurn() : 0;
-    const yaw = scrub ? turn : reduced ? 0 : t * cfg.spin;
-    g.scale.setScalar(Math.max(0.001, lerpIn(inE) * (1 + 0.06 * s) * backDimScale(turn)));
-    g.position.set(0, 0.15 + 0.1 * s + float - (1 - inE) * 1.6, 0);
+    const float = reduced ? 0 : Math.sin(t * 0.9) * 0.05;
+    // In the SHOWROOM the rig parent owns yaw (user drag + gated sway) —
+    // a clock turn would spin under the user's finger. Elsewhere: the
+    // slow idle turn. Reduced motion holds still.
+    const yaw = showroomState.active || reduced ? 0 : t * cfg.spin;
+    g.scale.setScalar(Math.max(0.001, lerpIn(inE)));
+    g.position.set(0, 0.15 + float - (1 - inE) * 1.6, 0);
     g.rotation.y = cfg.baseYaw + yaw + (1 - inE) * 0.9;
-    g.rotation.x = (reduced ? 0 : Math.sin(t * 0.5) * 0.04 * idle) + 0.1 * s;
-
-    // Indicator strip lifts toward the peak — the device "wakes up".
-    themed.forEach((clone) => {
-      if (clone instanceof THREE.MeshStandardMaterial) clone.emissiveIntensity = 1 + 1.8 * s;
-    });
-    applyBackDim(dimBase, turn, SCENE[mode].canvas);
+    g.rotation.x = reduced ? 0 : Math.sin(t * 0.5) * 0.04;
   }));
 
   return (

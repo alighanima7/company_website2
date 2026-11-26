@@ -207,6 +207,11 @@
   /* Clean-studio light: no scanline texture — unbroken paper canvas. */
   --scan-line: transparent;
   --scan-blend: normal;
+  /* Showroom: the strip's active product name — the one place raw green
+     carries TEXT (UI floor 3.5:1; #198948 on paper = 4.1:1). */
+  --sr-active: #198948;
+  /* Page canvas color — the label dots' knockout ring. */
+  --sr-knockout: #F0F6F4;
   /* Palm-green halo behind the deep-teal display type. */
   --h1-glow: drop-shadow(0 2px 18px rgba(25, 137, 72, 0.3));
   --stat-glow: none;
@@ -301,6 +306,8 @@ html[lang="en"] {
   --label-halo: 0 2px 10px rgba(6, 18, 22, 0.95);
   --scan-line: rgba(240, 246, 244, 0.02);
   --scan-blend: overlay;
+  --sr-active: #3fd97f;
+  --sr-knockout: #0B1619;
   --h1-glow: drop-shadow(0 0 24px rgba(63, 217, 127, 0.25));
   --stat-glow: 0 0 16px rgba(63, 217, 127, 0.32);
   --shield-glow: drop-shadow(0 0 9px rgba(63, 217, 127, 0.5));
@@ -343,8 +350,6 @@ html[lang="en"] {
 .faq,
 .stat,
 .contact-item,
-.product-card,
-.product-rail,
 .spec-row,
 .gl-hint,
 .theme-toggle,
@@ -1285,150 +1290,421 @@ h2 {
   height: 0;
 }
 
-/* ── Products · browse: one viewport-tall segment per product ─────────
-   The lineup reads as a sequence: each product owns a segment, the
-   persistent Stage canvas swaps to its showcase as that segment takes the
-   viewport midline, and the card is the only DOM in it. Native scroll
-   throughout — no scroll-snap, nothing that fights touch momentum. */
 
-.products-intro {
-  min-height: 70svh;
-  display: flex;
-  align-items: center;
-  padding: clamp(120px, 15svh, 170px) 4vw 40px;
-}
-.intro-block {
-  padding: clamp(20px, 2.6svh, 32px) clamp(20px, 2vw, 34px);
-}
+/* ── Products · SHOWROOM: one non-scrolling screen ────────────────────
+   BORDERLESS by principle: no cards, no panels, no glass, no filled
+   pills. Text and controls sit directly on the stage; the only allowed
+   decoration is the in-canvas floor ring, the faint index numeral and
+   the single hairline above the product strip. Model inline-start, text
+   zone inline-end (logical properties mirror the whole layout for LTR,
+   matching the camera's locale mirror). */
 
-/* A browse segment is a TRACK: taller than the viewport, with the stage
-   pinned inside it. The card holds still while the track scrolls past and
-   the model animates across `--track − 100svh` of travel. `--track` is an
-   inline per-product value (productScroll.BROWSE_TRACK_SVH); the fallback
-   keeps the layout sane if it is ever missing. */
-.browse-seg {
-  position: relative;
-  min-height: var(--track, 100svh);
+body[data-showroom] {
+  overflow: hidden;
+  overscroll-behavior: none;
 }
-.browse-stage {
-  position: sticky;
-  top: 0;
-  min-height: 100svh;
-  display: flex;
-  align-items: center;
-  padding: 110px 4vw 80px;
+body[data-showroom] .site-footer,
+body[data-showroom] .theme-veil {
+  display: none;
+}
+/* The stage owns every touch on this route (rotate/zoom — nothing to
+   scroll); all other routes keep pan-y pinch-zoom. */
+body[data-showroom] .stage,
+body[data-showroom] .stage canvas {
+  touch-action: none;
 }
 
-.product-card {
-  max-width: min(40vw, 480px);
-  padding: clamp(18px, 2.4svh, 28px) clamp(18px, 1.8vw, 30px);
-  display: grid;
-  gap: clamp(5px, 0.8svh, 9px);
-  transition: border-color 0.35s ease;
-}
-/* The active segment's card carries the same signal edge the spec rows
-   use, so "which product is the canvas showing" is answered in the DOM
-   as well as by the scene itself. */
-.product-card.is-active {
-  border-inline-start: 3px solid var(--signal);
-}
-.card-name {
-  font-size: clamp(21px, 1.4vw + 1.2svh, 32px);
-  line-height: 1.22;
-  font-weight: 700;
-  color: var(--heading);
-}
-.card-tag {
-  font-size: 11px;
-  color: var(--faint);
-  text-align: start;
-}
-.card-blurb {
-  font-size: clamp(14px, 0.5vw + 0.5svh, 15.5px);
-  line-height: 1.6;
-  color: var(--dim);
-}
-html[lang="en"] .card-blurb { line-height: 1.5; }
-.card-cta {
-  margin-top: clamp(4px, 1svh, 10px);
-  justify-self: start;
-}
-
-/* Ghost position marker at the segment's foot — decorative, the rail and
-   the card's own kicker carry this for assistive tech. */
-/* Sits opposite the card, in the corner the model does not occupy.
-   Physical offsets on purpose: .mono forces `direction: ltr`, so logical
-   insets here would resolve against the ELEMENT's direction and pin the
-   marker to the same side in both locales. */
-.seg-count {
-  position: absolute;
-  bottom: clamp(26px, 6svh, 64px);
-  right: 4vw;
-  font-size: clamp(28px, 4vw, 54px);
-  font-weight: 600;
-  color: var(--faint);
-  opacity: 0.3;
-  pointer-events: none;
-}
-html[dir="rtl"] .seg-count {
-  right: auto;
-  left: 4vw;
-}
-.seg-count-total {
-  font-size: 0.42em;
-  opacity: 0.8;
-}
-
-/* Position indicator + jump links. Numbers always; the name expands on
-   hover/focus so the rail never covers the model at rest. */
-.product-rail {
+.sr-root {
   position: fixed;
-  inset-inline-end: clamp(8px, 1.2vw, 20px);
+  inset: 0;
+  z-index: 10;
+  padding:
+    calc(16px + env(safe-area-inset-top))
+    calc(16px + env(safe-area-inset-right))
+    calc(16px + env(safe-area-inset-bottom))
+    calc(16px + env(safe-area-inset-left));
+  pointer-events: none; /* children opt back in */
+}
+
+/* Huge faint index numeral — background, model side. */
+.sr-numeral {
+  position: absolute;
+  /* Above the hint/explode control row (block-end 124–132px) with room
+     to spare — the glyph box may touch the MODEL (it is the background)
+     but never a control or text. */
+  inset-block-end: 196px;
+  /* PHYSICAL sides on purpose: the element carries dir="ltr" for digit
+     order, which would flip its OWN logical inset against the page's. */
+  right: 2vw;
+  font-size: clamp(150px, 24vw, 300px);
+  line-height: 0.8;
+  font-weight: 600;
+  color: var(--ink);
+  /* ≈1.05:1 against the canvas in both themes — a watermark, not type.
+     Dark ink is brighter per unit alpha, so it runs lower. */
+  opacity: 0.028;
+  letter-spacing: -0.04em;
+  user-select: none;
+}
+:root:not([data-theme="dark"]) .sr-numeral {
+  opacity: 0.04;
+}
+html[dir="rtl"] .sr-numeral {
+  right: auto;
+  left: 2vw;
+}
+
+/* Poster: covers the model zone during loads; crossfades out when the
+   live scene reports ready; IS the experience without WebGL. */
+.sr-poster {
+  position: absolute;
+  inset-inline-end: 4vw;
   top: 50%;
   translate: 0 -50%;
-  z-index: 24;
-  display: grid;
-  gap: 5px;
+  width: min(46vw, 620px);
+  height: auto;
+  object-fit: contain;
+  opacity: 1;
+  transition: opacity 0.45s ease;
+  pointer-events: none;
+}
+.sr-poster[data-ready] {
+  opacity: 0;
+}
+
+/* Gesture surface: the model half. Rotate (drag) + zoom (wheel/pinch). */
+.sr-gesture {
+  position: absolute;
+  inset-block: 70px 120px;
+  inset-inline-end: 0;
+  width: 55%;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+}
+.sr-gesture:active {
+  cursor: grabbing;
+}
+
+.sr-hint {
+  position: absolute;
+  inset-block-end: 132px;
+  inset-inline-end: clamp(16px, 6vw, 90px);
+  font-size: 12.5px;
+  color: var(--dim);
+  pointer-events: none;
+}
+
+.sr-explode {
+  position: absolute;
+  inset-block-end: 124px;
+  inset-inline-end: clamp(16px, 24vw, 420px);
   pointer-events: auto;
 }
-.rail-item {
+
+/* ── Text zone: free-floating copy, no container ─────────────────────── */
+
+.sr-text {
+  position: absolute;
+  inset-inline-start: clamp(20px, 6vw, 110px);
+  top: 50%;
+  translate: 0 -50%;
+  width: min(42vw, 520px);
+  display: grid;
+  gap: 10px;
+  pointer-events: auto;
+}
+.sr-text-in {
+  animation: sr-in 0.38s ease both;
+}
+.sr-text-out {
+  animation: sr-out 0.38s ease both;
+  pointer-events: none;
+}
+@keyframes sr-in {
+  from { opacity: 0; translate: 0 calc(-50% + 10px); }
+  to { opacity: 1; translate: 0 -50%; }
+}
+@keyframes sr-out {
+  from { opacity: 1; translate: 0 -50%; }
+  to { opacity: 0; translate: 0 calc(-50% - 10px); }
+}
+/* Phone variants: the text zone is bottom-docked there (no -50% shift). */
+@keyframes sr-in-m {
+  from { opacity: 0; translate: 0 10px; }
+  to { opacity: 1; translate: 0 0; }
+}
+@keyframes sr-out-m {
+  from { opacity: 1; translate: 0 0; }
+  to { opacity: 0; translate: 0 -10px; }
+}
+
+.sr-index {
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  color: var(--emerald-bright);
+}
+.sr-text .sr-name {
+  margin: 0;
+  font-size: clamp(30px, 3.6vw, 56px);
+  line-height: 1.25;
+  color: var(--heading);
+}
+html[lang="en"] .sr-text .sr-name {
+  font-size: clamp(26px, 3vw, 46px);
+  line-height: 1.1;
+}
+.sr-tag {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--faint);
+}
+.sr-features {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+.sr-features li {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 6px 9px;
-  border: 1px solid transparent;
-  border-radius: 11px;
-  color: var(--faint);
-  text-decoration: none;
-  transition: color 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+  font-size: 14px;
+  line-height: 1.85;
+  color: var(--dim);
 }
-.rail-num { font-size: 11px; }
-.rail-name {
-  font-size: 12.5px;
-  max-width: 0;
-  overflow: hidden;
+/* Marker as a flex item: optically centered on the line box in every
+   theme/locale (the old inline-block + vertical-align baseline hack
+   drifted between Arabic and Latin metrics). */
+.sr-features li::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--signal);
+  margin-inline-end: 10px;
+}
+.sr-feature-text {
+  /* One short line each — longer copy lives on the detail page. */
+  min-width: 0;
   white-space: nowrap;
-  opacity: 0;
-  transition: max-width 0.35s ease, opacity 0.35s ease;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.rail-item:hover,
-.rail-item:focus-visible { color: var(--ink); }
-.rail-item:hover .rail-name,
-.rail-item:focus-visible .rail-name {
-  max-width: 44vw;
-  opacity: 1;
+
+.sr-ctas {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 26px;
 }
-.rail-item[aria-current="true"] {
+
+/* Text links — the showroom's only "buttons". 44px hit areas via
+   padding; focus = thicker underline in the focus color, no rings. */
+.sr-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 2px;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 14.5px;
   color: var(--ink);
-  background: var(--tile-bg);
-  border-color: rgba(var(--cta-rgb), 0.55);
-  -webkit-backdrop-filter: var(--tile-backdrop);
-  backdrop-filter: var(--tile-backdrop);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 7px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  transition: color 0.2s ease, text-decoration-color 0.2s ease;
 }
-.rail-item[aria-current="true"] .rail-num { color: var(--emerald-bright); }
-.rail-item:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
+.sr-link:hover {
+  text-decoration-color: currentColor;
+}
+.sr-link-primary {
+  color: var(--sr-active);
+  font-weight: 600;
+}
+.sr-link:focus-visible,
+.sr-tab:focus-visible {
+  outline: none;
+  color: var(--focus);
+  text-decoration: underline;
+  text-decoration-color: var(--focus);
+  text-decoration-thickness: 3px;
+  text-underline-offset: 7px;
+}
+
+/* ── Bottom strip: the lineup as plain text over one hairline ────────── */
+
+.sr-strip {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: calc(10px + env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px clamp(16px, 5vw, 64px) 2px;
+  border-top: 1px solid var(--line);
+  pointer-events: auto;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  touch-action: pan-x;
+}
+.sr-strip::-webkit-scrollbar {
+  display: none;
+}
+.sr-tab {
+  flex: 0 0 auto;
+  scroll-snap-align: center;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px; /* hard tap floor — survives every padding trim */
+  padding: 12px 14px;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--dim);
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+.sr-tab:hover {
+  color: var(--ink);
+}
+.sr-tab.is-active {
+  color: var(--sr-active);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 8px;
+  text-decoration-thickness: 2px;
+}
+
+/* ── Showroom part labels: the chips, borderless ─────────────────────
+   The exploded view reuses the detail chips' anchors and content, but on
+   this page they are plain text with a thin leader — no box, no glass. */
+body[data-showroom] .callout {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+  padding: 0 0 0 14px;
+  position: relative;
+}
+body[data-showroom] .callout::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0.7em;
+  width: 10px;
+  height: 1px;
+  background: var(--signal);
+}
+body[data-showroom] .callout-spec {
+  display: none;
+}
+
+/* ── Showroom exploded-part labels (srx) ─────────────────────────────
+   Positioned per frame by the rig's projector: the ROOT translates to
+   the anchor (the part's projected bbox center), the DOT sits at the
+   root origin, the LINE rotates from that origin to the text's near
+   edge, and the TEXT carries its own offset. Borderless: plain type +
+   one hairline + a knockout-ringed dot. */
+.srx {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 12;
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+.srx-dot {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  /* Dark: the brighter ice-green — ≥3:1 against every part shade the
+     models carry (near-black housings AND the gray harness wiring). */
+  background: var(--ice);
+  /* Knockout edge: a ring of the page canvas color separates the dot
+     from BOTH the part behind it and the background — no box, no pill. */
+  box-shadow: 0 0 0 2px var(--sr-knockout);
+}
+:root:not([data-theme="dark"]) .srx-dot {
+  background: var(--sr-active);
+  /* Light: one extra hairline OUTSIDE the paper knockout. Against black
+     housings the paper ring is the ≥3:1 edge; against mid-gray wiring
+     the dark hairline is — every part shade gets a passing boundary. */
+  box-shadow: 0 0 0 2px var(--sr-knockout), 0 0 0 3px rgba(12, 56, 69, 0.85);
+}
+.srx-line {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 1px;
+  background: var(--sr-active);
+  opacity: 0.75;
+  transform-origin: 0 50%;
+}
+.srx-text {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  gap: 2px;
+  max-width: 260px;
+}
+.srx-tag {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--emerald-bright);
+  white-space: nowrap;
+  text-shadow: var(--label-halo), var(--label-halo);
+}
+.srx-desc {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 260px;
+  /* The canvas under a label is not uniform (contact shadow in light,
+     halo in dark). The site's label-halo token backs the glyphs with
+     the page color — same device the city labels use, still no box. */
+  text-shadow: var(--label-halo), var(--label-halo);
+}
+
+@media (max-width: 767px) {
+  .srx-desc { max-width: 160px; font-size: 11.5px; }
+  .srx-text { max-width: 160px; }
+}
+
+/* ── Short viewports (landscape phones): compress, never scroll ──────── */
+@media (max-height: 540px) {
+  .sr-features { display: none; }
+  .sr-text { gap: 6px; }
+  .sr-text .sr-name { font-size: clamp(22px, 4.2vh, 34px); }
+  .sr-numeral { font-size: clamp(120px, 36vh, 220px); }
+  .sr-hint { inset-block-end: 96px; }
+  .sr-explode { inset-block-end: 88px; }
+  .sr-gesture { inset-block: 56px 88px; }
+  .sr-strip { padding-block: 2px 0; }
+  .sr-tab { padding-block: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sr-text-in,
+  .sr-text-out { animation: none; }
+  .sr-text-out { display: none; }
+  .sr-poster { transition: none; }
 }
 
 /* ── Products · detail: one product on its own ────────────────────────── */
@@ -1857,7 +2133,8 @@ a:focus-visible {
   .contact-item,
   .nav-link,
   .btn,
-  .rail-item,
+  .sr-tab,
+  .sr-link,
   .faq summary {
     touch-action: manipulation;
   }
@@ -1881,12 +2158,6 @@ a:focus-visible {
   .home-hero,
   .product-stage { padding-top: 150px; }
   .page-doc { padding-top: 170px; }
-  /* The nav rail docks at 74px on this tier — browse segments must clear
-     it, and 40vw is too narrow a card to read at this width. */
-  .browse-stage { padding-top: 160px; }
-  .products-intro { padding-top: 170px; }
-  .product-card { max-width: min(56vw, 440px); }
-  .rail-name { font-size: 12px; }
 }
 
 /* ── sm: phones (<768px) — stacked zoning + bottom tab bar ────────────── */
@@ -1973,31 +2244,54 @@ a:focus-visible {
     padding: 76px 16px 96px;
   }
 
-  /* Browse on phones: the 3D composition owns the upper half (the Stage's
-     mobile rig already tilts the scene up there), the card docks low and
-     clears the bottom tab bar. The rail would collide with that bar, so
-     it goes — the card's own 01–05 kicker carries the position. */
-  .products-intro {
-    min-height: 56svh;
-    align-items: flex-end;
-    padding: 108px 16px 24px;
+
+  /* Showroom on phones: model owns the upper half (the mobile camera rig
+     already parks the scene up there), the text docks below it, and the
+     strip rides just above the bottom tab bar. Still zero scrolling. */
+  .sr-numeral {
+    inset-block-end: auto;
+    inset-block-start: calc(44px + env(safe-area-inset-top));
+    font-size: clamp(120px, 38vw, 200px);
   }
-  .browse-stage {
-    align-items: flex-end;
-    padding: 46svh 16px calc(104px + env(safe-area-inset-bottom));
+  .sr-poster {
+    inset-inline: 0;
+    margin-inline: auto;
+    top: calc(60px + env(safe-area-inset-top));
+    translate: 0 0;
+    width: min(78vw, 420px);
   }
-  .product-card {
-    max-width: 100%;
+  .sr-gesture {
+    inset-block: calc(56px + env(safe-area-inset-top)) 46%;
     width: 100%;
-    padding: 16px 16px 18px;
-    border-radius: 18px;
   }
-  .card-name { font-size: clamp(20px, 5.6vw, 26px); }
-  .card-blurb { font-size: 14px; }
-  .product-rail { display: none; }
-  /* Full-width cards leave no free corner, and the card's own 01–05
-     kicker already states the position. */
-  .seg-count { display: none; }
+  .sr-hint {
+    inset-block-end: auto;
+    inset-block-start: 50svh;
+    inset-inline-end: 16px;
+  }
+  .sr-explode {
+    inset-block-end: auto;
+    inset-block-start: calc(50svh - 12px);
+    inset-inline: 16px auto;
+  }
+  .sr-text {
+    inset-inline: 16px;
+    top: auto;
+    translate: 0 0;
+    inset-block-end: calc(148px + env(safe-area-inset-bottom));
+    width: auto;
+    gap: 6px;
+  }
+  .sr-text-in { animation-name: sr-in-m; }
+  .sr-text-out { animation-name: sr-out-m; }
+  .sr-text .sr-name { font-size: clamp(24px, 6.4vw, 32px); }
+  .sr-features li { font-size: 14px; line-height: 1.7; }
+  .sr-ctas { margin-top: 8px; gap: 4px 22px; }
+  .sr-strip {
+    inset-block-end: calc(84px + env(safe-area-inset-bottom));
+    justify-content: flex-start;
+    border-top-width: 1px;
+  }
 
   .detail-specs { padding: 28px 16px calc(96px + env(safe-area-inset-bottom)); }
   .specs-block {
@@ -2068,12 +2362,6 @@ a:focus-visible {
   /* A live OS toggle collapses the explode runway immediately — the JS
      side re-renders without it on the next visit anyway. */
   .explode-runway { display: none; }
-  /* Browse tracks collapse to a plain viewport-tall section and the stage
-     stops pinning: no tall tracks and no scroll-linked motion, just the
-     static assembled model per segment. ProductsBrowse also attaches no
-     scrub under reduced motion, so the scenes hold their rest pose. */
-  .browse-seg { min-height: 100svh; }
-  .browse-stage { position: static; }
   .reveal { opacity: 1 !important; transform: none !important; visibility: visible !important; }
   .reveal,
   body,
@@ -2081,13 +2369,5 @@ a:focus-visible {
   .lang-toggle,
   .theme-toggle .icon,
   .btn,
-  .nav-link,
-  .product-card,
-  .rail-item,
-  .rail-name { transition: none; }
-  /* The rail's name is revealed by a width transition; with transitions
-     off it must still open on hover/focus rather than snapping from a
-     zero-width box mid-interaction. */
-  .rail-item:hover .rail-name,
-  .rail-item:focus-visible .rail-name { max-width: 44vw; opacity: 1; }
+  .nav-link { transition: none; }
 }

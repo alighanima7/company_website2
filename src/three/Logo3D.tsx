@@ -37,8 +37,6 @@ const MODEL_URL = "/models/logo.glb";
  *  it balances against the map slab in the Home composition. */
 const LOGO_SPAN = 2.3;
 
-useGLTF.preload(MODEL_URL, false, true);
-
 export function Logo3D(): JSX.Element {
   return (
     <Suspense fallback={null}>

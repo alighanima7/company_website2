@@ -303,6 +303,14 @@ export const COPY = {
   cue: { ar: "مرّر للاستكشاف", en: "Scroll to explore" },
   /** Shown if the WebGL context is lost and the browser can't restore it. */
   glLost: { ar: "توقّف العرض ثلاثي الأبعاد — اضغط لإعادة التحميل", en: "3D view paused — tap to reload" },
+  /** Products showroom UI microcopy (interface text, not product claims). */
+  showroom: {
+    rotateHint: { ar: "اسحب للتدوير", en: "Drag to rotate" },
+    explode: { ar: "فكّك +", en: "Explode +" },
+    assemble: { ar: "جمّع −", en: "Assemble −" },
+    stripLabel: { ar: "اختيار المنتج", en: "Select product" },
+    quoteCta: { ar: "طلب عرض سعر", en: "Request a quote" },
+  },
 } as const;
 
 /** Smart security collar — the Wild Animal Tracking field unit. Modeled on
@@ -656,6 +664,14 @@ export const VISIBLE_PRODUCTS: readonly Product[] = PRODUCTS.filter((p) => p.hid
  *  the same path as `#/products/not-a-thing` and lands on the sequence. */
 export function isVisibleProductId(value: string): value is ProductId {
   return VISIBLE_PRODUCTS.some((p) => p.id === value);
+}
+
+/** The showroom's three short feature lines: capability chips when the
+ *  product has them, else its first three spec-row descriptions. Existing
+ *  copy only — [TODO] rows surface as [TODO] until real text lands. */
+export function productFeatures(p: Product): readonly Bi[] {
+  const source = p.chips ?? p.callouts.map((c) => c.desc);
+  return source.slice(0, 3);
 }
 
 /** "03 // VEHICLE TERMINAL" — the number comes from the VISIBLE position,

@@ -9,7 +9,7 @@ import { CITY_CALLOUTS } from "../content";
 import { useLocale } from "../locale";
 import { clamp01, lerp, motionState, phase } from "../motion";
 import { FLAGS, timedFrame } from "../perf/probe";
-import { BROWSE_PEAK, dampProductScroll, productScroll, productTurn } from "../productScroll";
+import { markStageLoading, markStageReady, showroomState } from "../showroom";
 import { useIsMobile } from "../responsive";
 import { SCENE, useTheme } from "../theme";
 
@@ -22,14 +22,9 @@ import { SCENE, useTheme } from "../theme";
  * all wired to a central IoT hub by dashed data pulses, under a slowly
  * turning management ring.
  *
- * Two modes, decided by whether a scroll driver is attached:
- *  · BROWSE — scrubbed by the segment track. The district ASSEMBLES out
- *    of its platform (towers → lamps → parking → bins, each on its own
- *    staggered window), the ring spins up, the pulses start streaming and
- *    each pillar's callout opens as that pillar finishes rising — then it
- *    all settles back down, so the scene swap lands on a clean state.
- *  · DETAIL — no runway exists for this product, so it stands fully built
- *    and runs the original clock spin + callout carousel.
+ * The district stands fully built and runs the clock spin + callout
+ * carousel — except in the SHOWROOM, where the rig parent owns all yaw
+ * (user drag + gated sway) and the spin hands over to it.
  *
  * Reduced motion holds the lit district still and fully built.
  */
@@ -123,6 +118,14 @@ export function CityScape3D(): JSX.Element {
   const locale = useLocale();
   const isMobile = useIsMobile();
 
+  // Showroom poster crossfade: this scene is procedural — ready on mount.
+  useEffect(() => {
+    markStageReady();
+    return () => {
+      markStageLoading();
+    };
+  }, []);
+
   const mats = useMemo(() => {
     const P = SCENE[mode];
     return {
@@ -173,28 +176,12 @@ export function CityScape3D(): JSX.Element {
       setCalloutsLive(live);
     }
 
-    // Browse scrubs this scene; detail mode (no runway for this product)
-    // leaves it on the clock, fully built. Normalized because browse caps
-    // at BROWSE_PEAK and that is the only scroll range this scene sees.
-    const scrub = productScroll.driven && !reduced;
-    const s = scrub ? clamp01(dampProductScroll(dt) / BROWSE_PEAK) : 0;
-
-    /* The district ASSEMBLES: each pillar family grows out of the platform
-       on its own staggered window, so the quarter builds itself tower →
-       lamps → parking → bins and settles back down by the segment's end.
-       Every one of these is a real mesh family in this scene — nothing is
-       faked to create the effect. Unscrubbed, everything stands at 1. */
-    const build = (a: number, b: number): number => (scrub ? Math.max(0.001, phase(s, a, b)) : 1);
-    const rise: ReadonlyArray<[{ current: THREE.Group | null }, number]> = [
-      [towersRef, build(0.05, 0.45)],
-      [lampsRef, build(0.18, 0.58)],
-      [parkRef, build(0.3, 0.7)],
-      [binsRef, build(0.42, 0.82)],
-    ];
-    rise.forEach(([ref, k]) => {
+    /* The district stands fully built; pillar heights hold at 1 (the old
+       browse scrub grew them out of the platform — that scrub is gone). */
+    for (const ref of [towersRef, lampsRef, parkRef, binsRef]) {
       const node = ref.current;
-      if (node !== null) node.scale.y = k;
-    });
+      if (node !== null) node.scale.y = 1;
+    }
 
     const g = root.current;
     if (g !== null) {
@@ -204,52 +191,39 @@ export function CityScape3D(): JSX.Element {
     }
     const sp = spinner.current;
     if (sp !== null) {
-      // Scrubbed: ONE full revolution of the district, monotonic and eased
-      // to a stop at both ends, so the swap always lands on the same
-      // orientation. A district has no "front" and its callouts are
-      // anchored to clear the model at EVERY yaw, so a full turn is the
-      // natural reading here — and there is no texture to mirror.
-      // Otherwise the slow presentation spin. Reduced motion holds still.
-      sp.rotation.y = scrub ? productTurn() : reduced ? 0 : t * 0.08;
+      // In the SHOWROOM the rig parent owns yaw (user drag + gated sway).
+      // Elsewhere: the slow presentation spin. Reduced motion holds still.
+      sp.rotation.y = showroomState.active || reduced ? 0 : t * 0.08;
     }
 
-    // Management ring: spins up with the build, then breathes.
+    // Management ring: breathes over the built district.
     const ring = ringRef.current;
     if (ring !== null) {
-      if (!reduced) ring.rotation.z = scrub ? -s * 2.4 : -t * 0.18;
+      if (!reduced) ring.rotation.z = -t * 0.18;
       const m = ring.material as THREE.MeshBasicMaterial;
-      const ringIn = scrub ? phase(s, 0.1, 0.5) : 1;
-      m.opacity = 0.5 * enter * ringIn * (reduced ? 0.75 : 0.75 + 0.25 * Math.sin(t * 1.4));
+      m.opacity = 0.5 * enter * (reduced ? 0.75 : 0.75 + 0.25 * Math.sin(t * 1.4));
     }
 
     // Data pulses stream hub→pillars once the district is up.
     pulseRefs.current.forEach((line, i) => {
       const material = line?.material;
       if (material !== undefined) {
-        const up = scrub ? phase(s, 0.35, 0.75) : 1;
-        material.opacity = clamp01((phase(enter, 0.6, 1) * 1.2 - i * 0.05) * up);
-        if (!reduced) material.dashOffset = scrub ? -s * 6 - i * 0.2 : -t * 0.5 - i * 0.2;
+        material.opacity = clamp01(phase(enter, 0.6, 1) * 1.2 - i * 0.05);
+        if (!reduced) material.dashOffset = -t * 0.5 - i * 0.2;
       }
     });
 
-    // Callouts reveal ONE AT A TIME — scrubbed, each pillar's chip opens
-    // as that pillar finishes rising and closes before the next, so they
-    // can never stack. Otherwise the clock carousel, as before.
-    const cyc = scrub ? s : reduced || !live ? -1 : (t % CYCLE) / CYCLE;
+    // Callouts reveal ONE AT A TIME on the clock carousel, so they can
+    // never stack inside the frame.
+    const cyc = reduced || !live ? -1 : (t % CYCLE) / CYCLE;
     CITY_CALLOUTS.forEach((_, i) => {
       const el = labelRefs.current[i];
       if (el === null || el === undefined) return;
-      let o: number;
-      if (scrub) {
-        const a = 0.2 + i * 0.17;
-        o = live ? phase(s, a, a + 0.07) * (1 - phase(s, a + 0.13, a + 0.2)) : 0;
-      } else {
-        o =
-          cyc < 0
-            ? 0
-            : phase(cyc, 0.04 + i * 0.24, 0.1 + i * 0.24) *
-              (1 - phase(cyc, 0.2 + i * 0.24, 0.24 + i * 0.24));
-      }
+      const o =
+        cyc < 0
+          ? 0
+          : phase(cyc, 0.04 + i * 0.24, 0.1 + i * 0.24) *
+            (1 - phase(cyc, 0.2 + i * 0.24, 0.24 + i * 0.24));
       el.style.opacity = String(o);
       el.style.transform = `translateY(${String((1 - o) * 8)}px)`;
     });

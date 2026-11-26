@@ -7,10 +7,17 @@ import * as THREE from "three";
 import { FMC130_CALLOUTS, FMC920_CALLOUTS, GALILEOSKY_CALLOUTS } from "../content";
 import type { PartCallout } from "../content";
 import { getLocale, useLocale } from "../locale";
-import { lerp, motionState, phase } from "../motion";
+import { dampK, lerp, motionState, phase } from "../motion";
 import { FLAGS, timedFrame } from "../perf/probe";
-import { dampProductScroll, productScroll, productTurn } from "../productScroll";
-import { applyBackDim, backDimScale, captureDimBase } from "./backDim";
+import { dampProductScroll, productScroll } from "../productScroll";
+import {
+  clearShowroomLabels,
+  markStageLoading,
+  markStageReady,
+  registerShowroomLabels,
+  showroomState,
+} from "../showroom";
+import type { ShowroomLabel } from "../showroom";
 import { useIsMobile, useViewportTier } from "../responsive";
 import { SCENE, useTheme } from "../theme";
 
@@ -27,11 +34,13 @@ import { SCENE, useTheme } from "../theme";
  *    wiring loop behind it) and the quick-release connector pieces: the
  *    explosion reads as the unit unplugging from its install harness.
  *
- * One input drives everything: productScroll (0 assembled → 1 exploded),
- * attached by ProductsPage over the runway section and damped here once
- * per frame. Part positions are authored-home + offset·phase(t), so
- * scrolling back to 0 restores the EXACT original assembly. Reduced
- * motion pins the pose assembled and static.
+ * One input drives everything: the explode value, 0 assembled → 1 fully
+ * exploded. In DETAIL views it is productScroll (the runway scrub),
+ * damped here once per frame. In the SHOWROOM it is the controlled
+ * `explode` prop (the text toggle), damped locally to the same feel.
+ * Part positions are authored-home + offset·phase(t), so returning to 0
+ * restores the EXACT original assembly. Reduced motion pins the pose
+ * assembled in detail and jumps instantly in the showroom.
  *
  * Axis note: both GLBs are authored label-face toward +Z (verified by
  * test renders) — the devices' front/back axis ("Y" in the Blender-style
@@ -172,6 +181,11 @@ export function preloadFmc(id: FmcId): void {
   useGLTF.preload(CONFIGS[id].url, false, true);
 }
 
+/** Evict one GLB's loader-cache entry (showroom's far-neighbor cleanup). */
+export function clearFmc(id: FmcId): void {
+  useGLTF.clear(CONFIGS[id].url);
+}
+
 /** Node-name key: three's GLTFLoader sanitizes "root.0.refined" into
  *  "root0refined" — normalize the same way so the config map matches. */
 function partKey(name: string): string {
@@ -194,7 +208,20 @@ interface PartState {
  *  theme (dark: a mid-teal halo so the black units silhouette instead of
  *  melting into the night canvas — chosen over the flat variant by A/B
  *  renders; light: null, the paper canvas separates on its own). */
-export function StageGlow({ color }: { color: string }): JSX.Element {
+export function StageGlow({
+  color,
+  position = [0, 0.3, -1.8],
+  scale = 4.4,
+  opacity = 1,
+  meshRef,
+}: {
+  color: string;
+  position?: readonly [number, number, number];
+  scale?: number;
+  opacity?: number;
+  /** For callers that re-orient the quad per frame (the rig billboards it). */
+  meshRef?: (el: THREE.Mesh | null) => void;
+}): JSX.Element {
   const texture = useMemo(() => {
     const canvas = document.createElement("canvas");
     canvas.width = 256;
@@ -225,31 +252,59 @@ export function StageGlow({ color }: { color: string }): JSX.Element {
   }, [texture]);
 
   return (
-    <mesh position={[0, 0.3, -1.8]} scale={4.4}>
+    <mesh position={[position[0], position[1], position[2]]} scale={scale} ref={meshRef}>
       <circleGeometry args={[1, 48]} />
-      <meshBasicMaterial map={texture} transparent fog={false} depthWrite={false} />
+      <meshBasicMaterial map={texture} transparent opacity={opacity} fog={false} depthWrite={false} />
     </mesh>
   );
 }
 
+interface FmcDeviceProps {
+  readonly id: FmcId;
+  readonly showChips?: boolean;
+  /** Controlled explode target (showroom's text toggle). When defined the
+   *  scene damps toward it; when absent the detail runway scrub drives. */
+  readonly explode?: number;
+  /** Mount the in-scene glow disc (detail pages). The SHOWROOM passes
+   *  false: viewed obliquely from its trucked camera — and rotating with
+   *  the rig — the disc projects as a hard diagonal beam across the
+   *  model; the rig renders its own camera-facing halo instead. */
+  readonly stageGlow?: boolean;
+}
+
 /** Suspense shell: the GLB decodes off the critical path — the stage's
  *  lights and the page DOM never wait on it. */
-export function FmcDevice({ id, showChips = true }: { id: FmcId; showChips?: boolean }): JSX.Element {
+export function FmcDevice({
+  id,
+  showChips = true,
+  explode,
+  stageGlow = true,
+}: FmcDeviceProps): JSX.Element {
   const mode = useTheme();
   const glow = SCENE[mode].stageGlow;
   return (
     <Suspense fallback={null}>
-      {glow !== null && <StageGlow color={glow} />}
-      <FmcModel id={id} showChips={showChips} />
+      {stageGlow && glow !== null && <StageGlow color={glow} />}
+      <FmcModel id={id} showChips={showChips} {...(explode !== undefined ? { explode } : {})} />
     </Suspense>
   );
 }
 
-function FmcModel({ id, showChips }: { id: FmcId; showChips: boolean }): JSX.Element {
+function FmcModel({
+  id,
+  showChips,
+  explode: explodeProp,
+}: {
+  id: FmcId;
+  showChips: boolean;
+  explode?: number;
+}): JSX.Element {
   const cfg = CONFIGS[id];
   const group = useRef<THREE.Group>(null);
   const chipRefs = useRef<Array<HTMLDivElement | null>>([]);
   const entrance = useRef(motionState.reduced ? 1 : 0);
+  /** Damped copy of the controlled explode prop (showroom toggle). */
+  const expCurrent = useRef(0);
   // Chip <Html> portals recompute a screen-space transform EVERY frame
   // while mounted — they mount only once the teardown is well open (and
   // never under reduced motion; the DOM spec table carries the content).
@@ -261,6 +316,15 @@ function FmcModel({ id, showChips }: { id: FmcId; showChips: boolean }): JSX.Ele
   const tier = useViewportTier();
 
   const gltf = useGLTF(cfg.url, false, true);
+
+  // Showroom poster crossfade: this component mounting MEANS the GLB is
+  // decoded and the first real frame is imminent. No-op outside showroom.
+  useEffect(() => {
+    markStageReady();
+    return () => {
+      markStageLoading();
+    };
+  }, [id]);
 
   // ── Auto-centering + scale normalization (Box3 on mount) ──────────────
   const norm = useMemo(() => {
@@ -337,6 +401,38 @@ function FmcModel({ id, showChips }: { id: FmcId; showChips: boolean }): JSX.Ele
     });
   }, [gltf.scene, cfg, norm]);
 
+  // Showroom label registry (controlled mode only): DATA-DRIVEN anchors —
+  // each narrated part's own geometry bbox center in PART-LOCAL space, so
+  // the rig's projector can track the explode offset and the user's
+  // rotation every frame via localToWorld. No hand-tuned coordinates:
+  // replacing a GLB re-derives everything from the new meshes.
+  useEffect(() => {
+    if (explodeProp === undefined) return undefined;
+    const regs: ShowroomLabel[] = [];
+    for (const part of parts) {
+      if (part.chip === undefined) continue; // only narrated parts
+      const mesh = part.node as THREE.Mesh;
+      if (mesh.geometry.boundingBox === null) mesh.geometry.computeBoundingBox();
+      const bb = mesh.geometry.boundingBox;
+      if (bb === null) continue;
+      regs.push({
+        id: part.chip.callout.id,
+        tag: part.chip.callout.tag,
+        desc: part.chip.callout.desc,
+        node: part.node,
+        center: bb.getCenter(new THREE.Vector3()),
+        halfExtents: bb.getSize(new THREE.Vector3()).multiplyScalar(0.5),
+        sign: part.offset >= 0 ? 1 : -1,
+        els: { root: null, line: null, text: null },
+        fade: 0,
+      });
+    }
+    registerShowroomLabels(regs);
+    return () => {
+      clearShowroomLabels();
+    };
+  }, [parts, explodeProp !== undefined]);
+
   // Every mesh casts onto the daylight shadow catcher AND self-receives
   // the key light — normalBias at the light kills acne.
   useEffect(() => {
@@ -373,8 +469,6 @@ function FmcModel({ id, showChips }: { id: FmcId; showChips: boolean }): JSX.Ele
     });
     return clones;
   }, [originals, mode]);
-
-  const dimBase = useMemo(() => captureDimBase(themed.values()), [themed]);
 
   useEffect(() => {
     originals.forEach((source, mesh) => {
@@ -422,12 +516,24 @@ function FmcModel({ id, showChips }: { id: FmcId; showChips: boolean }): JSX.Ele
     entrance.current = Math.min(1, entrance.current + dt * 0.55);
     const inE = 1 - Math.pow(1 - entrance.current, 3);
 
-    // The one scroll input, damped here (this scene is productScroll's
-    // only 3D consumer). Reduced motion pins the device assembled.
-    const explode = reduced ? 0 : dampProductScroll(dt);
+    // The one explode input. Controlled (showroom toggle): damp the prop
+    // locally — reduced motion jumps instantly so the toggle still works.
+    // Uncontrolled (detail runway): the scroll scrub, damped in its store;
+    // reduced motion pins the device assembled there (no runway renders).
+    let explode: number;
+    if (explodeProp !== undefined) {
+      if (reduced) expCurrent.current = explodeProp;
+      else expCurrent.current += (explodeProp - expCurrent.current) * dampK(0.0008, dt);
+      explode = expCurrent.current;
+      // The rig's label projector gates its fades on the value the parts
+      // ACTUALLY moved by this frame.
+      showroomState.explodeCurrent = explode;
+    } else {
+      explode = reduced ? 0 : dampProductScroll(dt);
+    }
 
-    // Browse passes showChips=false: there the teardown is a fast teaser
-    // beside the product card, and the chips are detail mode's reward.
+    // Chips are the DETAIL pages' part labels (the showroom renders its
+    // own borderless system and always passes showChips=false).
     const live = showChips && !reduced && entrance.current >= 1 && explode > 0.5;
     if (live !== chipsLiveRef.current) {
       chipsLiveRef.current = live;
@@ -442,9 +548,6 @@ function FmcModel({ id, showChips }: { id: FmcId; showChips: boolean }): JSX.Ele
       p.node.position[EXPLODE_AXIS] += p.offset * k;
     }
 
-    // Browse revolution (0 in detail mode, which keeps openYaw alone).
-    const turnForDim = productScroll.driven && productScroll.turn > 0 ? productTurn() : 0;
-
     const g = group.current;
     if (g !== null) {
       // Presentation turn: assembled faces the viewer dead-on; as the
@@ -452,22 +555,21 @@ function FmcModel({ id, showChips }: { id: FmcId; showChips: boolean }): JSX.Ele
       // Z-spread across the screen so the separation reads as depth
       // instead of scale. Idle float keeps held frames alive.
       const open = phase(explode, 0.04, 0.78);
-      // In BROWSE the scroll already supplies a strong, deliberate motion.
-      // The clock idles are damped right down there: they ran on periods
-      // (7.0s / 15.7s) that share no common multiple with each other, so
-      // the composite never repeated and the model read as restless. The
-      // sway is dropped outright — it was scaled by (1 - open), i.e.
-      // LOUDEST at the segment boundary, exactly where the scene swaps.
-      // Detail mode keeps both at their original amplitude.
+      // While the DETAIL runway scrub drives, the clock idles damp right
+      // down (the scroll already supplies deliberate motion); untethered
+      // they run at full amplitude. In the SHOWROOM the rig parent owns
+      // yaw entirely (user drag + gated sway), so the scene contributes
+      // no clock yaw of its own there — only the vertical float.
       const idle = productScroll.driven ? 0.35 : 1;
       const float = reduced ? 0 : Math.sin(t * 0.9) * 0.05 * idle;
-      const sway = reduced || productScroll.driven ? 0 : Math.sin(t * 0.4) * 0.05 * (1 - open);
+      const sway =
+        reduced || productScroll.driven || showroomState.active
+          ? 0
+          : Math.sin(t * 0.4) * 0.05 * (1 - open);
       g.scale.setScalar(
         Math.max(
           0.001,
-          lerp(0.6, 1, inE) *
-            lerp(1, cfg.explodedScale, phase(explode, 0.2, 0.9)) *
-            backDimScale(turnForDim),
+          lerp(0.6, 1, inE) * lerp(1, cfg.explodedScale, phase(explode, 0.2, 0.9)),
         ),
       );
       g.position.set(0, 0.15 + 0.12 * open + float - (1 - inE) * 1.6, 0);
@@ -475,19 +577,9 @@ function FmcModel({ id, showChips }: { id: FmcId; showChips: boolean }): JSX.Ele
       // with it, so the Z-spread swings ACROSS the screen in both locales
       // instead of stacking into the view axis on one of them.
       const mx = getLocale() === "en" ? -1 : 1;
-      // BROWSE: one full revolution driven by raw scroll progress —
-      // monotonic, eased to a stop at both ends, and (by YAW_HOLD_WINDOW)
-      // nearly stationary exactly where the parts are furthest apart, so
-      // the teardown is never read off a spinning body. The locale mirror
-      // is deliberately NOT applied to it: the camera trucks sideways but
-      // stays on +Z, so the same face sequence must play in both locales.
-      // DETAIL: the original openYaw presentation turn, untouched.
-      g.rotation.y =
-        (cfg.baseYaw ?? 0) + turnForDim + mx * (cfg.openYaw * open + (1 - inE) * 0.9) + sway;
+      g.rotation.y = (cfg.baseYaw ?? 0) + mx * (cfg.openYaw * open + (1 - inE) * 0.9) + sway;
       g.rotation.x = (reduced ? 0 : Math.sin(t * 0.5) * 0.03 * idle) + 0.15 * open;
     }
-
-    if (!FLAGS.nodim) applyBackDim(dimBase, turnForDim, SCENE[mode].canvas);
 
     // Chips fade in across the last stretch of the opening, one after
     // another, and back out in reverse on the way down.

@@ -1,32 +1,23 @@
-import { useEffect, useRef, useState } from "react";
-import type { CSSProperties, JSX } from "react";
+import { useEffect, useRef } from "react";
+import type { JSX } from "react";
 
 import { productKicker, PRODUCTS_PAGE, VISIBLE_PRODUCTS } from "../content";
 import { useLocale } from "../locale";
 import { motionState } from "../motion";
-import { timedCall } from "../perf/probe";
-import {
-  attachBrowseScroll,
-  attachProductScroll,
-  BROWSE_TRACK_DEFAULT_SVH,
-  BROWSE_TRACK_SVH,
-  BROWSE_WARM_AT,
-  RUNWAY_SVH,
-} from "../productScroll";
+import { attachProductScroll, RUNWAY_SVH } from "../productScroll";
 import { setProduct } from "../productState";
 import type { ProductId } from "../productState";
-import { hrefFor, hrefForProduct, navigate, useProductParam } from "../router";
-import { preloadFmc } from "../three/FmcDevice";
+import { hrefFor, showroomHref, useProductParam } from "../router";
 import { useSceneFailed } from "../three/SceneBoundary";
-import { preloadSimple } from "../three/SimpleDevice";
+import { useTheme } from "../theme";
 import { initReveals } from "../ui/reveal";
+import { ShowroomPage, showroomHandoff } from "./ShowroomPage";
 
-/** Static product shots (baked from the real models) that stand in for
- *  the FMC viewers when the WebGL layer has crashed. */
-const STATIC_SHOTS: Partial<Record<string, string>> = {
-  fmc130: "/images/fmc130-static.webp",
-  fmc920: "/images/fmc920-static.webp",
-};
+/** Theme-aware poster set (baked from the GLBs by `npm run posters`) —
+ *  the detail pages' stand-in when the WebGL layer has crashed. */
+function posterFor(id: ProductId, mode: "light" | "dark"): string {
+  return `/posters/${id}-${mode}.webp`;
+}
 
 /** Products whose GLB ships a real part split — these get the pinned
  *  stage + runway teardown. Everything else is a plain document. */
@@ -34,244 +25,22 @@ function hasTeardown(id: ProductId): id is "fmc130" | "fmc920" | "galileosky" {
   return id === "fmc130" || id === "fmc920" || id === "galileosky";
 }
 
-/** Warm the heavy GLB for a product that is about to come into view.
- *  Products with procedural scenes have nothing to fetch. */
-function warm(id: ProductId): void {
-  if (id === "fmc130" || id === "fmc920" || id === "galileosky") preloadFmc(id);
-  else if (id === "galileosky10") preloadSimple(id);
-}
-
-/* ── Cross-mode memory ────────────────────────────────────────────────
-   Browse and detail are different components on the same route, so React
-   unmounts one to mount the other. These two module-level values are the
-   only thread between them: where the browse sequence was parked, and
-   which card sent the visitor into detail (so focus can be handed back).
-   ProductsPage clears both when the route leaves products entirely —
-   otherwise a later visit would restore a stale offset. */
-let browseScrollY = 0;
-let returnTo: ProductId | null = null;
-/** True once the visitor has actually left the browse sequence for a
- *  detail view. Arriving straight at a detail URL leaves it false, so
- *  that case does NOT steal focus on first paint — the same courtesy
- *  App.tsx extends with its firstRoute guard. */
-let openedFromBrowse = false;
-
 /**
- * Products — the lineup as a scroll sequence (browse) plus one view per
- * product (detail), switched by the URL alone:
+ * Products — the single-screen SHOWROOM plus one view per product
+ * (detail), switched by the URL alone:
  *
- *  · `#/products`          browse: one viewport-tall segment per VISIBLE
- *    product, each a compact card, with the persistent Stage canvas
- *    swapping to that product's showcase as its segment takes the
- *    viewport. Hidden products are absent from every list here.
+ *  · `#/products`          showroom: one non-scrolling screen, the active
+ *    product staged in 3D with free rotate/zoom, selection via the bottom
+ *    strip (`?p=<id>` keeps it shareable). Hidden products are absent
+ *    from every list here.
  *  · `#/products/<id>`     detail: that product on its own. Devices whose
  *    GLB ships a real part split keep the scroll-driven teardown — a
  *    pinned stage over a runway — with the spec table as a normal section
  *    below it; single-mesh products are a plain document.
- *
- * The two scroll-driven systems can never run together: the browse
- * scroll-spy lives only in ProductsBrowse, and attachProductScroll is
- * called only from ProductDetail. Different components on different URLs,
- * so the exclusivity is structural rather than a runtime guard.
  */
 export function ProductsPage(): JSX.Element {
   const detailId = useProductParam();
-
-  // Leaving the products route altogether: forget where browse was and
-  // who opened what, so the next visit starts clean.
-  useEffect(
-    () => () => {
-      browseScrollY = 0;
-      returnTo = null;
-    },
-    [],
-  );
-
-  return detailId === null ? <ProductsBrowse /> : <ProductDetail id={detailId} />;
-}
-
-/* ── Browse ──────────────────────────────────────────────────────────── */
-
-/** How long a segment must hold the viewport midline before the canvas
- *  commits to it. The rail and aria-current update immediately; only the
- *  expensive part (mounting a showcase, decoding a multi-megabyte GLB) is
- *  deferred, so a fast flick through the lineup doesn't thrash the GPU. */
-const COMMIT_MS = 160;
-
-function ProductsBrowse(): JSX.Element {
-  const l = useLocale();
-  const root = useRef<HTMLDivElement | null>(null);
-  const committed = useRef<number | undefined>(undefined);
-  /** Segments whose successor has already been warmed — once each. */
-  const warmed = useRef<Set<string>>(new Set());
-  // Which segment owns the viewport — DOM-side only, so the rail responds
-  // on the same frame as the scroll.
-  const [active, setActive] = useState<ProductId>(() => VISIBLE_PRODUCTS[0]?.id ?? "tracker");
-
-  useEffect(() => {
-    const el = root.current;
-    return el === null ? undefined : initReveals(el);
-  }, []);
-
-  // Restore the sequence where the visitor left it, and hand focus back to
-  // the card that opened the detail view.
-  useEffect(() => {
-    if (returnTo === null) return;
-    const id = returnTo;
-    returnTo = null;
-    if (browseScrollY > 0) {
-      window.scrollTo(0, browseScrollY);
-    } else {
-      // Arrived straight at a detail URL and then went back — there is no
-      // remembered offset, so put that product's segment on screen rather
-      // than parking focus somewhere invisible.
-      document.querySelector(`.browse-seg[data-product="${id}"]`)?.scrollIntoView();
-    }
-    setActive(id);
-    setProduct(id);
-    document
-      .querySelector<HTMLAnchorElement>(`.product-card[data-product="${id}"] .card-cta`)
-      ?.focus({ preventScroll: true });
-  }, []);
-
-  // Scroll-spy: rootMargin collapses the viewport to its midline, so
-  // exactly one segment can satisfy the observer at a time.
-  useEffect(() => {
-    const el = root.current;
-    if (el === null) return undefined;
-
-    const onScroll = timedCall("scroll:parkY", (): void => {
-      browseScrollY = window.scrollY;
-    });
-    window.addEventListener("scroll", onScroll, { passive: true });
-    // Unmounting browse means a detail view is opening from here, so that
-    // view may take focus.
-    const markOpened = (): void => {
-      openedFromBrowse = true;
-    };
-
-    const io = new IntersectionObserver(
-      (entries) => {
-        const hit = entries.find((e) => e.isIntersecting);
-        if (hit === undefined) return;
-        const id = hit.target.getAttribute("data-product") as ProductId | null;
-        if (id === null) return;
-        setActive(id);
-        window.clearTimeout(committed.current);
-        committed.current = window.setTimeout(() => {
-          setProduct(id);
-        }, COMMIT_MS);
-      },
-      { rootMargin: "-50% 0px -50% 0px", threshold: 0 },
-    );
-    el.querySelectorAll(".browse-seg").forEach((s) => {
-      io.observe(s);
-    });
-
-    // Segment scrub. Reduced motion attaches nothing: the tracks collapse
-    // to one viewport in CSS and every scene holds its assembled pose.
-    const detachScrub = motionState.reduced
-      ? undefined
-      : attachBrowseScroll(el, (id, p) => {
-          // Warm the NEXT product partway through this one, so the swap at
-          // the boundary never stalls on a multi-megabyte decode.
-          if (p < BROWSE_WARM_AT || warmed.current.has(id)) return;
-          warmed.current.add(id);
-          const next = VISIBLE_PRODUCTS[VISIBLE_PRODUCTS.findIndex((x) => x.id === id) + 1];
-          if (next !== undefined) warm(next.id);
-        });
-
-    return () => {
-      io.disconnect();
-      detachScrub?.();
-      window.removeEventListener("scroll", onScroll);
-      window.clearTimeout(committed.current);
-      markOpened();
-    };
-  }, []);
-
-  return (
-    <div className="page page-products page-browse" ref={root}>
-      {/* Lead-in. The page-level kicker is deliberately not rendered here:
-          it numbers by nav order ("02 // PRODUCT LINEUP") and would sit
-          directly above the products' own 01..NN run. */}
-      <section className="products-intro">
-        <div className="copy-block intro-block">
-          <h2 className="reveal">{PRODUCTS_PAGE.h2[l]}</h2>
-          <p className="lead reveal">{PRODUCTS_PAGE.lead[l]}</p>
-        </div>
-      </section>
-
-      {/* One TRACK per product. The stage inside pins while the track
-          scrolls past, so the card holds still and the model animates
-          across the travel. Track height is the per-product tunable;
-          reduced motion collapses it back to one viewport in CSS. */}
-      {VISIBLE_PRODUCTS.map((p, i) => (
-        <section
-          className="browse-seg"
-          key={p.id}
-          data-product={p.id}
-          style={
-            {
-              "--track": `${String(BROWSE_TRACK_SVH[p.id] ?? BROWSE_TRACK_DEFAULT_SVH)}svh`,
-            } as CSSProperties
-          }
-        >
-          <div className="browse-stage">
-            <article
-              className={`copy-block product-card${p.id === active ? " is-active" : ""}`}
-              data-product={p.id}
-            >
-              <p className="kicker mono">{productKicker(p)}</p>
-              <h3 className="card-name">{p.name[l]}</h3>
-              <p className="mono card-tag" dir="ltr">
-                {p.tag}
-              </p>
-              <p className="card-blurb">{p.blurb[l]}</p>
-              <a className="btn primary card-cta" href={hrefForProduct(p.id)}>
-                {PRODUCTS_PAGE.detailsCta[l]}
-                <span className="sr-only"> — {p.name[l]}</span>
-              </a>
-            </article>
-
-            <p className="seg-count mono" aria-hidden="true" dir="ltr">
-              {String(i + 1).padStart(2, "0")}
-              <span className="seg-count-total">
-                /{String(VISIBLE_PRODUCTS.length).padStart(2, "0")}
-              </span>
-            </p>
-          </div>
-        </section>
-      ))}
-
-      {/* Position indicator + jump links. Hidden below 768px, where the
-          card's own 01–05 kicker carries the same information. */}
-      <nav className="product-rail" aria-label={PRODUCTS_PAGE.switchLabel[l]}>
-        {VISIBLE_PRODUCTS.map((p, i) => (
-          <a
-            key={p.id}
-            className="rail-item"
-            href={`#seg-${p.id}`}
-            aria-current={p.id === active ? "true" : undefined}
-            onClick={(e) => {
-              e.preventDefault();
-              // block:"start" lands on the track's top edge, which is
-              // progress 0 — the card in place and the model assembled.
-              document.querySelector(`.browse-seg[data-product="${p.id}"]`)?.scrollIntoView({
-                behavior: motionState.reduced ? "auto" : "smooth",
-                block: "start",
-              });
-            }}
-          >
-            <span className="rail-num mono" dir="ltr">
-              {String(i + 1).padStart(2, "0")}
-            </span>
-            <span className="rail-name">{p.name[l]}</span>
-          </a>
-        ))}
-      </nav>
-    </div>
-  );
+  return detailId === null ? <ShowroomPage /> : <ProductDetail id={detailId} />;
 }
 
 /* ── Detail ──────────────────────────────────────────────────────────── */
@@ -283,6 +52,7 @@ function ProductDetail({ id }: { id: ProductId }): JSX.Element {
   const title = useRef<HTMLHeadingElement | null>(null);
   const cue = useRef<HTMLDivElement | null>(null);
   const glFailed = useSceneFailed();
+  const mode = useTheme();
 
   const product = VISIBLE_PRODUCTS.find((p) => p.id === id);
   const isFmc = product !== undefined && hasTeardown(product.id);
@@ -291,7 +61,6 @@ function ProductDetail({ id }: { id: ProductId }): JSX.Element {
   // The URL is the source of truth for which showcase is on the canvas.
   useEffect(() => {
     setProduct(id);
-    returnTo = id;
   }, [id]);
 
   useEffect(() => {
@@ -306,20 +75,31 @@ function ProductDetail({ id }: { id: ProductId }): JSX.Element {
   // taking it on first paint would be hostile.
   useEffect(() => {
     window.scrollTo(0, 0);
-    if (openedFromBrowse) title.current?.focus({ preventScroll: true });
+    if (showroomHandoff.toDetail) {
+      showroomHandoff.toDetail = false;
+      title.current?.focus({ preventScroll: true });
+    }
   }, [id]);
 
-  // Escape returns to the sequence — same destination as the back link
-  // and the browser's own Back button.
+  // Leaving back toward the showroom may hand focus to the strip there.
+  useEffect(
+    () => () => {
+      showroomHandoff.toShowroom = true;
+    },
+    [],
+  );
+
+  // Escape returns to the showroom PARKED ON THIS PRODUCT — the same
+  // destination as the back link.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === "Escape") navigate("products");
+      if (e.key === "Escape") window.location.hash = showroomHref(id);
     };
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
     };
-  }, []);
+  }, [id]);
 
   // Explode track: progress 0→1 across the pinned stage + runway wrapper.
   // Measuring the WRAPPER (not the page root) is what keeps the teardown
@@ -337,7 +117,7 @@ function ProductDetail({ id }: { id: ProductId }): JSX.Element {
   if (product === undefined) return <div className="page" />;
 
   const back = (
-    <a className="back-link" href={hrefFor("products")}>
+    <a className="back-link" href={showroomHref(id)}>
       <span aria-hidden="true" className="back-arrow">
         ←
       </span>
@@ -373,7 +153,7 @@ function ProductDetail({ id }: { id: ProductId }): JSX.Element {
       </ul>
 
       <div className="cta-row">
-        <a className="btn primary" href={hrefFor("requests")}>
+        <a className="btn primary" href={`${hrefFor("requests")}?product=${id}`}>
           {l === "ar" ? "اطلب عرض سعر" : "Request a quote"}
         </a>
         <a className="btn" href={hrefFor("support")}>
@@ -422,8 +202,8 @@ function ProductDetail({ id }: { id: ProductId }): JSX.Element {
             </div>
           )}
 
-          {glFailed && isFmc && STATIC_SHOTS[product.id] !== undefined && (
-            <img className="product-fallback" src={STATIC_SHOTS[product.id]} alt={product.name[l]} />
+          {glFailed && (
+            <img className="product-fallback" src={posterFor(product.id, mode)} alt={product.name[l]} />
           )}
         </section>
 

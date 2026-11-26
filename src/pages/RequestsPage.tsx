@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 
-import { ABOUT, DOMAINS, FORM, OFFERS, OFFERS_PAGE, REQUESTS_PAGE, STATS } from "../content";
+import { ABOUT, DOMAINS, FORM, isVisibleProductId, OFFERS, OFFERS_PAGE, REQUESTS_PAGE, STATS, VISIBLE_PRODUCTS } from "../content";
 import { useLocale } from "../locale";
 import type { Locale } from "../locale";
 import { Counter } from "../ui/Counter";
@@ -42,6 +42,33 @@ function RequestForm({ l }: { l: Locale }): JSX.Element {
   const [form, setForm] = useState<RequestState>(EMPTY_REQUEST);
   const [errors, setErrors] = useState<Partial<Record<keyof RequestState, string>>>({});
   const [done, setDone] = useState<{ ref: string; mailto: string } | null>(null);
+
+  // Quote prefill from the showroom / detail pages: `#/requests-about?product=<id>`
+  // preselects the quote type and seeds the details line — once, on mount,
+  // and only into an untouched form (never over the visitor's own text).
+  useEffect(() => {
+    const raw = window.location.hash;
+    const qIndex = raw.indexOf("?");
+    if (qIndex === -1) return;
+    const id = new URLSearchParams(raw.slice(qIndex + 1)).get("product");
+    if (id === null || !isVisibleProductId(id)) return;
+    const product = VISIBLE_PRODUCTS.find((p) => p.id === id);
+    if (product === undefined) return;
+    setForm((f) =>
+      f.details === ""
+        ? {
+            ...f,
+            type: "0", // "عرض سعر" / "Quote"
+            details:
+              l === "ar" ? `بخصوص: ${product.name.ar}
+` : `Regarding: ${product.name.en}
+`,
+          }
+        : f,
+    );
+    // Mount-only by design; the locale read is the mount-time one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const set = (key: keyof RequestState, value: string): void => {
     setForm((f) => ({ ...f, [key]: value }));

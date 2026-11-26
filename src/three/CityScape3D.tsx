@@ -10,7 +10,7 @@ import { useLocale } from "../locale";
 import { clamp01, lerp, motionState, phase } from "../motion";
 import { FLAGS, timedFrame } from "../perf/probe";
 import { markStageLoading, markStageReady, showroomState } from "../showroom";
-import { useIsMobile } from "../responsive";
+import { useIsMobile, viewport } from "../responsive";
 import { SCENE, useTheme } from "../theme";
 
 /**
@@ -186,7 +186,11 @@ export function CityScape3D(): JSX.Element {
     const g = root.current;
     if (g !== null) {
       g.visible = true;
-      g.scale.setScalar(Math.max(0.001, enter));
+      // The district is the widest thing on the stage — at phone widths it
+      // ran 106-123% of the viewport and was clipped at both edges
+      // (measured on the showroom and on the detail page). Narrow
+      // viewports fit it to the frame instead of cropping it.
+      g.scale.setScalar(Math.max(0.001, enter * (viewport.isMobile ? 0.78 : 1)));
       g.position.set(0, lerp(-2.6, -0.35, enter), 0);
     }
     const sp = spinner.current;

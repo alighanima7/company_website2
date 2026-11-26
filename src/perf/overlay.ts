@@ -1,4 +1,4 @@
-import { activeSwitches, FLAGS, setSink } from "./probe";
+import { activeSwitches, bumpDiag, diag, FLAGS, setSink } from "./probe";
 import type { ProbeSink } from "./probe";
 
 /**
@@ -447,6 +447,7 @@ function buildReport(mode: "sweep" | "record"): string {
         hardwareConcurrency: navigator.hardwareConcurrency,
         deviceMemoryGb: nav.deviceMemory ?? "unavailable",
       },
+      diag: { ...diag },
       totals: summarize(everything),
       segments: buckets.map(summarize),
     },
@@ -577,6 +578,18 @@ function render(): void {
     `-- js per frame (top 9) --`,
     jsLines === "" ? "  nothing instrumented yet" : jsLines,
     ``,
+    ``,
+    `-- diag (blank-canvas watch) --`,
+    `  ctx lost/restored ${String(diag.ctxLost)}/${String(diag.ctxRestored)}` +
+      `   canvasSwap ${String(diag.canvasSwaps)}`,
+    `  frames NOT redrawn ${String(diag.framesSkipped)} (run ${String(diag.longestSkipRun)})`,
+    `  long frames ${String(diag.longFrames)} max ${String(diag.maxFrameMs)}ms`,
+    `  meshes ${String(diag.meshes)}  suspenseDrops ${String(diag.suspenseDrops)}`,
+    `  resize buf/css ${String(diag.bufferResizes)}/${String(diag.cssResizes)}  ${diag.lastBuffer}`,
+    `  glb load/clear ${String(diag.glbLoads)}/${String(diag.glbClears)}` +
+      `${diag.lastClear === "" ? "" : ` (${diag.lastClear})`}`,
+    `  envRegens ${String(diag.envRegens)}`,
+    ``,
     `switches: ${switches.length === 0 ? "none (baseline)" : switches.join(", ")}`,
     `[p] hide panel`,
   ].join("\n");
@@ -645,6 +658,41 @@ function mountUi(): void {
   });
 }
 
+/* ── DOM-side diagnostics ──────────────────────────────────────────────
+   The canvas-side counters live in GlProbe; these are the ones only the
+   DOM can see — the <canvas> element being replaced, its CSS box being
+   resized, and the context lifecycle as the element reports it. */
+
+function observeCanvas(): void {
+  const stage = document.querySelector(".stage");
+  if (stage === null) {
+    // The stage mounts with React; retry until it exists.
+    window.setTimeout(observeCanvas, 400);
+    return;
+  }
+  let canvas = stage.querySelector("canvas");
+  let cssBox = "";
+
+  // NOTE: the context lifecycle is counted by ContextLossGuard inside the
+  // canvas, not here — it is present whether or not this chunk loaded, and
+  // counting in both places double-reported every event.
+  new MutationObserver(() => {
+    const now = stage.querySelector("canvas");
+    if (now !== canvas) {
+      canvas = now;
+      bumpDiag("canvasSwaps");
+    }
+  }).observe(stage, { childList: true, subtree: true });
+
+  new ResizeObserver((entries) => {
+    const e = entries[0];
+    if (e === undefined) return;
+    const box = `${String(Math.round(e.contentRect.width))}x${String(Math.round(e.contentRect.height))}`;
+    if (cssBox !== "" && box !== cssBox) bumpDiag("cssResizes");
+    cssBox = box;
+  }).observe(stage);
+}
+
 /* ── Entry ─────────────────────────────────────────────────────────────── */
 
 let mounted = false;
@@ -655,6 +703,7 @@ export function mount(): void {
 
   setSink(sink);
   observeLongTasks();
+  observeCanvas();
   mountUi();
   requestAnimationFrame(tick);
   window.setInterval(render, 250);

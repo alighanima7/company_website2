@@ -8,7 +8,7 @@ import { FMC130_CALLOUTS, FMC920_CALLOUTS, GALILEOSKY_CALLOUTS } from "../conten
 import type { PartCallout } from "../content";
 import { getLocale, useLocale } from "../locale";
 import { dampK, lerp, motionState, phase } from "../motion";
-import { FLAGS, timedFrame } from "../perf/probe";
+import { bumpDiag, FLAGS, noteDiag, timedFrame } from "../perf/probe";
 import { dampProductScroll, productScroll } from "../productScroll";
 import {
   clearShowroomLabels,
@@ -178,11 +178,14 @@ const CONFIGS: Record<FmcId, FmcConfig> = {
  *  instead of landing together on page entry. Draco OFF (CDN decoder),
  *  meshopt ON (bundled). */
 export function preloadFmc(id: FmcId): void {
+  bumpDiag("glbLoads");
   useGLTF.preload(CONFIGS[id].url, false, true);
 }
 
 /** Evict one GLB's loader-cache entry (showroom's far-neighbor cleanup). */
 export function clearFmc(id: FmcId): void {
+  bumpDiag("glbClears");
+  noteDiag("lastClear", id);
   useGLTF.clear(CONFIGS[id].url);
 }
 

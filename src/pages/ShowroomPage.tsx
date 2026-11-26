@@ -7,7 +7,13 @@ import { useLocale } from "../locale";
 import { motionState } from "../motion";
 import { setProduct } from "../productState";
 import type { ProductId } from "../productState";
-import { hrefFor, hrefForProduct, setShowroomProduct, useShowroomProduct } from "../router";
+import {
+  getProductParam,
+  hrefFor,
+  hrefForProduct,
+  setShowroomProduct,
+  useShowroomProduct,
+} from "../router";
 import {
   IDLE_RETURN_AFTER_S,
   MAX_YAW,
@@ -432,7 +438,13 @@ export function ShowroomPage(): JSX.Element {
       requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
       cancelIdleCallback?: (id: number) => void;
     };
+    let cancelled = false;
     const warm = (): void => {
+      // Hard guard: an idle callback that fires AFTER the visitor has left
+      // for a detail page must never evict — if they jumped to a product
+      // that is not one of this showroom's neighbours, the clear would
+      // land on the model the detail page is displaying and re-suspend it.
+      if (cancelled || getProductParam() !== null) return;
       const n = VISIBLE_PRODUCTS.length;
       const keep = new Set<ProductId>();
       for (const delta of [0, 1, -1]) {
@@ -450,11 +462,13 @@ export function ShowroomPage(): JSX.Element {
     if (typeof w.requestIdleCallback === "function") {
       const id = w.requestIdleCallback(warm, { timeout: 2500 });
       return () => {
+        cancelled = true;
         w.cancelIdleCallback?.(id);
       };
     }
     const id = window.setTimeout(warm, 800);
     return () => {
+      cancelled = true;
       window.clearTimeout(id);
     };
   }, [selected, index, modelReady, glFailed]);

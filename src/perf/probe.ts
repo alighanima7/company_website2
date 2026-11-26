@@ -128,6 +128,77 @@ export const FLAGS: PerfFlags = parse();
 /** Master gate. Hoisted to its own const so hot paths read a plain boolean. */
 export const PERF: boolean = FLAGS.on;
 
+/* ── Diagnostics counters ──────────────────────────────────────────────
+   The blank-canvas investigation's instrumentation, kept in the app so it
+   can be read on a real phone through the ?perf=1 overlay. Plain mutable
+   counters: writers guard every call with `if (PERF)`, so a normal
+   visitor pays nothing, and the overlay just reads the object. */
+
+export interface Diag {
+  /** WebGL context lifecycle (a GPU-process restart shows up here). */
+  ctxLost: number;
+  ctxRestored: number;
+  /** The <canvas> element itself being replaced (React remount). */
+  canvasSwaps: number;
+  /** Drawing-buffer and CSS-box resizes — the iOS toolbar used to drive
+   *  a stream of these, each one reallocating every render target. */
+  bufferResizes: number;
+  cssResizes: number;
+  lastBuffer: string;
+  /** rAF ticks where three did NOT draw. A canvas with
+   *  preserveDrawingBuffer:false that the compositor presents on such a
+   *  tick is exactly what a periodic "blank" looks like. */
+  framesSkipped: number;
+  longestSkipRun: number;
+  longFrames: number;
+  maxFrameMs: number;
+  /** Solid meshes currently in the scene — 0 means the Suspense fallback
+   *  is showing (a GLB cache eviction or a re-suspend). */
+  meshes: number;
+  suspenseDrops: number;
+  /** GLB loader-cache traffic: a clear of the ACTIVE model is a bug. */
+  glbLoads: number;
+  glbClears: number;
+  lastClear: string;
+  /** IBL regenerated after a context restore. */
+  envRegens: number;
+  /** Poster <-> live-model crossfades on the showroom. */
+  posterToggles: number;
+}
+
+export const diag: Diag = {
+  ctxLost: 0,
+  ctxRestored: 0,
+  canvasSwaps: 0,
+  bufferResizes: 0,
+  cssResizes: 0,
+  lastBuffer: "",
+  framesSkipped: 0,
+  longestSkipRun: 0,
+  longFrames: 0,
+  maxFrameMs: 0,
+  meshes: 0,
+  suspenseDrops: 0,
+  glbLoads: 0,
+  glbClears: 0,
+  lastClear: "",
+  envRegens: 0,
+  posterToggles: 0,
+};
+
+/** Count one diagnostic event. No-op unless the harness is on. */
+export function bumpDiag<K extends keyof Diag>(key: K, by = 1): void {
+  if (!PERF) return;
+  const v = diag[key];
+  if (typeof v === "number") (diag[key] as number) = v + by;
+}
+
+/** Record a diagnostic string (last GLB cleared, last buffer size). */
+export function noteDiag(key: "lastBuffer" | "lastClear", value: string): void {
+  if (!PERF) return;
+  diag[key] = value;
+}
+
 /* ── Sink ──────────────────────────────────────────────────────────────── */
 
 /** What the overlay installs to receive measurements. */

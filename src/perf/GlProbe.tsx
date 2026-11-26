@@ -1,8 +1,9 @@
 import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect } from "react";
+import type * as THREE from "three";
+import { useEffect, useRef } from "react";
 
 import { installMeasureApi } from "./measure";
-import { reportEnv, reportGl } from "./probe";
+import { bumpDiag, diag, noteDiag, reportEnv, reportGl } from "./probe";
 
 /**
  * In-canvas half of the harness: reads the renderer's own counters and the
@@ -75,8 +76,61 @@ export default function GlProbe(): null {
     });
   }, [gl, size.width, size.height, dpr]);
 
-  useFrame(() => {
+  /* Blank-canvas accounting, per rAF tick.
+   *
+   *  `info.render.frame` advances once per three render() call. A tick
+   *  where it did NOT advance is a frame the compositor may present
+   *  without a redraw — and with preserveDrawingBuffer:false that is
+   *  exactly what a periodic "blank canvas" looks like. Counting the
+   *  skips (and their longest run) says whether the blank is the render
+   *  loop stalling or something below it in the compositor.
+   *
+   *  The mesh count is the Suspense tripwire: solid meshes falling to 0
+   *  means the scene content itself vanished (a GLB cache eviction or a
+   *  re-suspend), which is a different bug with a different fix. */
+  const last = useRef({ frame: -1, t: 0, run: 0, meshes: -1 });
+
+  useFrame((state) => {
     const info = gl.info;
+    const now = performance.now();
+    const L = last.current;
+
+    if (L.frame >= 0) {
+      if (info.render.frame === L.frame) {
+        bumpDiag("framesSkipped");
+        L.run += 1;
+        if (L.run > diag.longestSkipRun) diag.longestSkipRun = L.run;
+      } else {
+        L.run = 0;
+      }
+      const dt = now - L.t;
+      if (dt > 50) {
+        bumpDiag("longFrames");
+        if (dt > diag.maxFrameMs) diag.maxFrameMs = Math.round(dt);
+      }
+    }
+    L.frame = info.render.frame;
+    L.t = now;
+
+    let meshes = 0;
+    state.scene.traverseVisible((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (mesh.isMesh !== true) return;
+      const mat = mesh.material as THREE.Material | THREE.Material[];
+      const type = Array.isArray(mat) ? mat[0]?.type : mat.type;
+      if (type === "MeshStandardMaterial" || type === "MeshPhysicalMaterial") meshes += 1;
+    });
+    diag.meshes = meshes;
+    if (L.meshes > 0 && meshes === 0) bumpDiag("suspenseDrops");
+    L.meshes = meshes;
+
+    const ctx = gl.getContext();
+    const buf = `${String(ctx.drawingBufferWidth)}x${String(ctx.drawingBufferHeight)}`;
+    if (buf !== diag.lastBuffer) {
+      if (diag.lastBuffer !== "") bumpDiag("bufferResizes");
+      noteDiag("lastBuffer", buf);
+    }
+
     reportGl(
       info.render.calls,
       info.render.triangles,

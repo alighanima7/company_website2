@@ -5,7 +5,7 @@ import type { JSX } from "react";
 import * as THREE from "three";
 
 import { motionState } from "../motion";
-import { timedFrame } from "../perf/probe";
+import { bumpDiag, noteDiag, timedFrame } from "../perf/probe";
 import { markStageLoading, markStageReady, showroomState } from "../showroom";
 import { SCENE, useTheme } from "../theme";
 import { StageGlow } from "./FmcDevice";
@@ -59,11 +59,14 @@ const CONFIGS: Record<SimpleDeviceId, SimpleConfig> = {
 
 /** Warm one GLB ahead of selection, same contract as preloadFmc. */
 export function preloadSimple(id: SimpleDeviceId): void {
+  bumpDiag("glbLoads");
   useGLTF.preload(CONFIGS[id].url, false, true);
 }
 
 /** Evict the loader-cache entry (showroom's far-neighbor cleanup). */
 export function clearSimple(id: SimpleDeviceId): void {
+  bumpDiag("glbClears");
+  noteDiag("lastClear", id);
   useGLTF.clear(CONFIGS[id].url);
 }
 

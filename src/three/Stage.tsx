@@ -8,14 +8,21 @@ import { COPY, isVisibleProductId } from "../content";
 import { dampHomeScroll } from "../homeScroll";
 import { getLocale, useLocale } from "../locale";
 import { dampK, lerp, motionState, phase } from "../motion";
-import { FLAGS, PERF, timedFrame } from "../perf/probe";
+import { bumpDiag, FLAGS, PERF, timedFrame } from "../perf/probe";
 import { POSTER } from "../poster/flag";
 import { useProduct } from "../productState";
-import { useIsMobile, useViewportTier, viewport } from "../responsive";
+import {
+  useIsCoarse,
+  useIsMobile,
+  usePhoneLayout,
+  useViewportTier,
+  viewport,
+} from "../responsive";
 import type { ViewportTier } from "../responsive";
 import { getRoute, useProductParam, useRoute } from "../router";
 import type { Route } from "../router";
 import { showroomState, useShowroomExplode } from "../showroom";
+import { notifyContextRestored, useGlGeneration } from "./glRecovery";
 import { getTheme, SCENE, useTheme } from "../theme";
 import { CityScape3D } from "./CityScape3D";
 import { Collar3D } from "./Collar3D";
@@ -69,6 +76,9 @@ const POSES: Record<Route, StagePose> = {
 /** Horizontal NDC where a side-zoned route's model anchor must project:
  *  72% of the viewport from the copy column's start edge. */
 const MODEL_NDC = 0.44;
+
+/** Render-resolution ceiling on touch devices (see the dpr memo below). */
+const COARSE_DPR_CAP = 1.5;
 
 interface FrameFit {
   readonly fov: number;
@@ -191,17 +201,24 @@ function StudioEnvironment(): null {
   const scene = useThree((s) => s.scene);
   const mode = useTheme();
   const isMobile = useIsMobile();
+  // A context restore invalidates RENDER-TARGET contents. three re-uploads
+  // ordinary textures by itself, but the PMREM environment lives in a
+  // render target: there is nothing left to re-upload, so the IBL would
+  // come back black and every PBR surface would render dead. Regenerating
+  // it is keyed on the recovery generation.
+  const generation = useGlGeneration();
 
   useEffect(() => {
     const pmrem = new THREE.PMREMGenerator(gl);
     const env = pmrem.fromScene(new RoomEnvironment(), 0.04);
     scene.environment = env.texture;
+    if (generation > 0) bumpDiag("envRegens");
     return () => {
       scene.environment = null;
       env.texture.dispose();
       pmrem.dispose();
     };
-  }, [gl, scene]);
+  }, [gl, scene, generation]);
 
   useEffect(() => {
     const p = SCENE[mode];
@@ -224,20 +241,31 @@ function StudioEnvironment(): null {
   return null;
 }
 
-/** Surfaces WebGL context loss to the DOM. `preventDefault` on the lost
- *  event is what allows the browser to attempt a restore; three re-uploads
- *  its resources on `webglcontextrestored` by itself. */
+/** Surfaces WebGL context loss to the DOM and drives recovery.
+ *
+ *  `preventDefault` on the lost event is what allows the browser to
+ *  attempt a restore at all. On restore three re-uploads its own
+ *  resources, but anything that lived in a RENDER TARGET is gone — the
+ *  PMREM environment and the post stack's buffers both. Bumping the
+ *  recovery generation re-creates them, and an immediate `invalidate()`
+ *  paints the repaired frame now rather than leaving a blank canvas
+ *  until something else happens to schedule one. */
 function ContextLossGuard({ onChange }: { onChange: (lost: boolean) => void }): null {
   const gl = useThree((s) => s.gl);
+  const invalidate = useThree((s) => s.invalidate);
 
   useEffect(() => {
     const el = gl.domElement;
     const onLost = (e: Event): void => {
       e.preventDefault();
+      bumpDiag("ctxLost");
       onChange(true);
     };
     const onRestored = (): void => {
+      bumpDiag("ctxRestored");
+      notifyContextRestored();
       onChange(false);
+      invalidate();
     };
     el.addEventListener("webglcontextlost", onLost);
     el.addEventListener("webglcontextrestored", onRestored);
@@ -245,7 +273,7 @@ function ContextLossGuard({ onChange }: { onChange: (lost: boolean) => void }): 
       el.removeEventListener("webglcontextlost", onLost);
       el.removeEventListener("webglcontextrestored", onRestored);
     };
-  }, [gl, onChange]);
+  }, [gl, onChange, invalidate]);
 
   return null;
 }
@@ -270,6 +298,13 @@ function RouteScene(): JSX.Element | null {
   // A product segment in the URL means detail mode; null means showroom.
   const inDetail = useProductParam() !== null;
   const explodeOn = useShowroomExplode();
+  // The phone detail page gets the same interaction rig as the showroom:
+  // one-finger rotate, gentle sway, damped return. Desktop detail keeps
+  // its untouched scroll-only presentation.
+  // Called unconditionally: Stage is persistent across routes, so a
+  // short-circuited hook would change the hook count on navigation.
+  const phoneLayout = usePhoneLayout();
+  const phoneDetail = inDetail && phoneLayout;
 
   if (route === "home") {
     return (
@@ -310,7 +345,7 @@ function RouteScene(): JSX.Element | null {
         />
       );
     } else scene = <Tracker key={key} />;
-    return inDetail ? scene : <ShowroomRig>{scene}</ShowroomRig>;
+    return inDetail && !phoneDetail ? scene : <ShowroomRig>{scene}</ShowroomRig>;
   }
   return null;
 }
@@ -342,13 +377,39 @@ export function Stage(): JSX.Element {
     };
   }, []);
 
-  // PERF (mobile): cap the render resolution at 1.5× — full 2–3× retina
-  // ratios melt phone GPUs for no visible gain at phone viewing distance.
+  /* PERF: cap the render resolution on TOUCH devices at COARSE_DPR_CAP.
+
+     Keyed on the POINTER, not the width: the old test was `isMobile`
+     (<768px), so a touch tablet in landscape still rendered at its full
+     2x — the device class that can least afford it. Phones run DPR 2-3,
+     so the cap bounds the worst case at 44-75% fewer fragments (a DPR-3
+     phone drops to a quarter of the pixel count). 1.5 rather than 1.0
+     because the stage is a smooth-shaded product render carrying no fine
+     text — all type is DOM and stays natively crisp — and at phone
+     viewing distance 1.5x still holds the silhouette and the specular
+     highlights that 1.0x visibly stairsteps. */
+  const coarse = useIsCoarse();
   const dpr = useMemo<number | [number, number]>(
     () =>
       // ?dpr=1 pins 1x: isolates everything that scales with pixel count.
-      FLAGS.dpr1 ? 1 : isMobile ? Math.min(window.devicePixelRatio, 1.5) : ([1, 2] as [number, number]),
-    [isMobile],
+      FLAGS.dpr1
+        ? 1
+        : coarse
+          ? Math.min(window.devicePixelRatio, COARSE_DPR_CAP)
+          : ([1, 2] as [number, number]),
+    [coarse],
+  );
+
+  /* Whether the post stack will ever mount for this context. Decided ONCE,
+     because `antialias` is fixed at context creation and cannot be changed
+     later without losing the context. */
+  const [willUseEffects] = useState(
+    () =>
+      !FLAGS.nofx &&
+      !POSTER.on &&
+      typeof window !== "undefined" &&
+      window.matchMedia("(pointer: fine)").matches &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
   );
 
   const onContextChange = useCallback((lost: boolean) => {
@@ -362,9 +423,23 @@ export function Stage(): JSX.Element {
           dpr={dpr}
           shadows={!FLAGS.noshadows}
           {...(FLAGS.demand ? ({ frameloop: "demand" } as const) : {})}
+          /* Coalesce resize storms: every size change reallocates the
+             drawing buffer AND every post-processing render target. The
+             stage is also pinned to the LARGE viewport in CSS (100lvh),
+             so an iOS toolbar sliding no longer changes its box at all —
+             this debounce only mops up genuine window drags. */
+          resize={{ debounce: { scroll: 50, resize: 140 }, scroll: false }}
           camera={{ fov: 42, near: 0.1, far: 70, position: [0, 0.55, 7.6] }}
           gl={{
-            antialias: !FLAGS.noaa,
+            /* Context MSAA is WASTED whenever the post stack is on: the
+               composer renders the scene into its own multisampled
+               targets and only blits a fullscreen triangle to the default
+               framebuffer, which has no interior edges to antialias — so
+               that multisampled back buffer was being allocated and
+               resolved every frame for nothing. Touch devices never mount
+               the composer, and there context MSAA is the only AA there
+               is, so they keep it. */
+            antialias: !FLAGS.noaa && !willUseEffects,
             powerPreference: "high-performance",
             // Poster capture needs a transparent drawing buffer. Normal
             // visitors keep the opaque buffer (cheaper compositing).

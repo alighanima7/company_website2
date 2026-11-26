@@ -437,6 +437,18 @@ a {
   inset: 0;
   z-index: 0;
 }
+/* iOS toolbar hardening: `inset: 0` makes the stage track the SMALL
+   viewport, so every URL-bar slide resized the drawing buffer and every
+   post-processing render target with it — a stream of reallocations
+   during the exact gesture (scrolling) that can least afford them.
+   Pinning the height to the LARGE viewport makes the box constant; the
+   strip the toolbar covers is background stage, so nothing is lost. */
+@supports (height: 100lvh) {
+  .stage {
+    bottom: auto;
+    height: 100lvh;
+  }
+}
 
 /* The full-viewport canvas must never capture vertical pan gestures —
    native scrolling is the interaction model. */
@@ -464,7 +476,17 @@ main summary,
 .hero-block,
 .copy-block,
 .glass-card,
-.site-footer {
+.site-footer,
+/* The phone detail layout is borderless, so its text is no longer inside
+   a .copy-block — without these it inherited `main`'s pointer-events:none
+   and every tap fell straight through to the canvas. */
+.detail-lede,
+.detail-flow,
+/* …and the rotate surface itself, which is not a link or a text block:
+   without this the one-finger drag never reached its handlers — the
+   touch was swallowed by main's pointer-events:none and the model sat
+   still. */
+.detail-grab {
   pointer-events: auto;
 }
 
@@ -1705,6 +1727,273 @@ body[data-showroom] .callout-spec {
   .sr-text-out { animation: none; }
   .sr-text-out { display: none; }
   .sr-poster { transition: none; }
+}
+
+
+/* ── Products · DETAIL on phones (<=820px) ───────────────────────────
+   Stacked and borderless, replacing the single tall glass card that used
+   to fill the screen and bury the model (measured: 71-111% of the
+   viewport, covering 83-100% of the model on every non-explodable
+   product).
+
+   Structure — the pin is a DIRECT child of the page, so its sticky
+   scope is the whole route and the model never stops being on screen:
+
+     .detail-pin      sticky, top:0, for the entire page
+        .product-stage   RESERVED model band, transparent -> the clipped
+                         canvas shows through. Sized in svh so an iOS
+                         toolbar sliding cannot change it.
+        .detail-lede     OPAQUE strip (page background, no border, no
+                         radius, no shadow) carrying the back link,
+                         kicker, name and tag. Pinned with the band, so
+                         it never travels up into the fixed brand mark.
+     .explode-track   explodable only; wraps the runway the explode is
+                      scrubbed across. Its extent from the document top
+                      is what attachProductScroll maps scroll onto.
+     .detail-flow     the spec flow — plain text, hairlines, no tiles.
+                      This is what scrolls; it passes BEHIND the clipped
+                      canvas (see the layering below) and so can never
+                      appear over the model.                                */
+
+@media (max-width: 820px) {
+  .page-detail-phone {
+    padding-bottom: calc(40px + env(safe-area-inset-bottom));
+  }
+
+
+  /* One band height, used by the band box AND by the canvas clip below;
+     they must not drift apart or the model gets cropped or the flow
+     shows through. */
+  body:has(.page-detail-phone) {
+    --band-h: 46svh;
+  }
+
+  /* Layering, bottom to top, on this route only:
+       .detail-flow (1)  the spec text, which scrolls
+       .stage       (5)  the canvas, CLIPPED to the band
+       .detail-pin  (6)  the band's own furniture + the opaque lede
+     The canvas sitting ABOVE the flow is what keeps the model clear: the
+     flow scrolls up and is hidden by the canvas before it can reach the
+     band, which a transparent band could never do on its own. `main`
+     must drop its stacking context for this to be expressible at all —
+     with z-index:10 on main, nothing outside it can order between its
+     children. */
+  body:has(.page-detail-phone) main {
+    z-index: auto;
+  }
+  body:has(.page-detail-phone) .stage {
+    z-index: 5;
+    /* --band-bottom is published by ProductDetail from the band's real
+       rect, because the pin stops being sticky when the footer arrives.
+       The static fallback is the resting case, so first paint is right
+       before any scroll handler has run. */
+    clip-path: inset(0 0 calc(100% - var(--band-bottom, var(--band-h))) 0);
+    /* …and dissolve rather than being sliced as the band leaves. */
+    opacity: var(--stage-dim, 1);
+  }
+  .page-detail-phone .detail-flow {
+    position: relative;
+    z-index: 1;
+  }
+  .detail-pin {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+  }
+
+  /* The band the model is framed into. The .detail-pin wrapper owns the
+     stickiness; this stays RELATIVE so it is the containing block for the
+     grab surface and the cue. (As `static` they resolved against the pin
+     instead and the grab overlay swallowed the back link's taps.) */
+  .page-detail-phone .product-stage {
+    position: relative;
+    display: block;
+    min-height: 0;
+    height: var(--band-h);
+    padding: 0;
+  }
+
+  /* One-finger rotate lives here and ONLY here — the lede and the spec
+     flow keep default touch behaviour so vertical swipes still scroll. */
+  .detail-grab {
+    position: absolute;
+    inset: calc(46px + env(safe-area-inset-top)) 0 0 0;
+    touch-action: none;
+    cursor: grab;
+  }
+  .detail-grab:active {
+    cursor: grabbing;
+  }
+
+  /* Re-shown for this layout: the blanket phone rule hides .scroll-cue
+     because it used to collide with the bottom tab bar, but here it sits
+     inside the model band with room to spare — and it is the only hint
+     that scrolling takes the device apart. */
+  .page-detail-phone .scroll-cue {
+    display: grid;
+    top: auto;
+    bottom: 6px;
+    gap: 3px;
+  }
+  /* Only the compact mark fits the gap between the model and the band's
+     edge (~70px). The full sentence wraps to two lines at phone widths —
+     in English it climbed over the device — so the band keeps the mono
+     "SCROLL" and its line, and the sentence stays a desktop affordance. */
+  .page-detail-phone .scroll-cue > span:not(.mono):not(.cue-line) {
+    display: none;
+  }
+  /* The cue sits over the contact shadow, not over paper, so the --dim
+     teal it inherits measured 3.99:1 there in the light theme. The
+     stronger ink reads 6.3:1 against the same sampled pixels and is the
+     only colour change the phone cue needs — dark already measures
+     12.5:1 and is left alone. */
+  .page-detail-phone .scroll-cue .mono {
+    color: var(--heading);
+  }
+  .page-detail-phone .cue-line {
+    height: 20px;
+  }
+
+  .detail-lede {
+    background: var(--bg);
+    padding: 8px 16px 12px;
+    display: grid;
+    gap: 3px;
+  }
+  .detail-lede .back-link {
+    margin-bottom: 2px;
+  }
+  .page-detail-phone .detail-name {
+    margin-top: 2px;
+    font-size: clamp(22px, 6vw, 30px);
+    line-height: 1.25;
+  }
+  .page-detail-phone .product-tag {
+    font-size: 11px;
+  }
+
+  /* The pin owns the top of the screen for the whole route, so the flow
+     is what scrolls. Its bottom padding is the fixed nav's room plus the
+     home-indicator inset — without it the last spec row can never be
+     scrolled clear of the nav. */
+  .detail-flow {
+    padding: 18px 16px calc(96px + env(safe-area-inset-bottom));
+    display: grid;
+    gap: 16px;
+  }
+  .page-detail-phone .lead {
+    margin-top: 0;
+    font-size: 14px;
+    line-height: 1.85;
+  }
+
+  /* Specs as a clean text list: hairline rows, no tiles, no chips-as-pills. */
+  .page-detail-phone .spec-title {
+    margin: 0;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+  }
+  .page-detail-phone .spec-list {
+    display: grid;
+    gap: 0;
+  }
+  /* The phone row has no surface any more (see the background reset
+     below), so it must ALSO give back the on-surface ink slots .spec-row
+     rebinds for the desktop glass panel. Without this the description
+     keeps --text-on-surface — near-white — and in the light theme it
+     renders white-on-paper, i.e. invisible. `inherit` rather than fixed
+     values so both themes stay correct from the page tokens. */
+  .page-detail-phone .spec-row {
+    --ink: inherit;
+    --heading: inherit;
+    --dim: inherit;
+    --faint: inherit;
+    --cta: inherit;
+    --emerald-bright: inherit;
+    --ice: inherit;
+    --signal: inherit;
+    --line: inherit;
+    --border: inherit;
+    --err: inherit;
+    --focus: inherit;
+    --accent-rgb: inherit;
+    --scrollbar: inherit;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2px 12px;
+    align-items: baseline;
+    padding: 11px 0;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: none;
+    box-shadow: none;
+    border-radius: 0;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .page-detail-phone .spec-tag {
+    grid-column: 1;
+    font-size: 9.5px;
+  }
+  .page-detail-phone .spec-spec {
+    grid-column: 2;
+    grid-row: 1;
+    font-size: 11px;
+    text-align: end;
+  }
+  .page-detail-phone .spec-desc {
+    grid-column: 1 / -1;
+    font-size: 14px;
+    line-height: 1.7;
+  }
+  .page-detail-phone .chips {
+    gap: 6px;
+  }
+  .page-detail-phone .chip {
+    border: 0;
+    background: none;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    padding: 0;
+    font-size: 12.5px;
+    color: var(--dim);
+  }
+  .page-detail-phone .chip + .chip::before {
+    content: "·";
+    margin-inline-end: 6px;
+    color: var(--faint);
+  }
+  .page-detail-phone .cta-row {
+    margin-top: 2px;
+    gap: 10px;
+  }
+  .page-detail-phone .btn {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .page-detail-phone .back-link {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* Explode travel on phones. Shorter than the desktop runway because a
+     phone viewport is tall relative to its width, so the same svh count
+     is far more finger travel. */
+  .page-detail-phone .explode-runway {
+    height: 170svh;
+  }
+
+}
+
+@media (max-width: 820px) and (prefers-reduced-motion: reduce) {
+  /* No runway under reduced motion (ProductDetail renders none), and the
+     stage fade becomes a hard switch rather than a ramp. */
+  .page-detail-phone .explode-runway {
+    display: none;
+  }
 }
 
 /* ── Products · detail: one product on its own ────────────────────────── */

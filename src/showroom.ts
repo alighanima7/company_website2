@@ -129,6 +129,28 @@ export function resetShowroomView(): void {
   setShowroomExplode(false);
 }
 
+/** One-finger rotate for a stage surface, shared by the showroom's
+ *  gesture layer and the phone detail page. Writes straight into
+ *  showroomState; ShowroomRig damps, clamps and eases it home. */
+export function dragRotate(dx: number, dy: number): void {
+  showroomState.yaw += dx * 0.0075;
+  showroomState.pitch += dy * 0.006;
+  showroomState.lastInteract = performance.now();
+}
+
+export function beginDrag(): void {
+  showroomState.dragging = true;
+  showroomState.yawV = 0;
+  showroomState.pitchV = 0;
+  showroomState.lastInteract = performance.now();
+}
+
+export function endDrag(yawVelocity: number): void {
+  showroomState.dragging = false;
+  showroomState.yawV = yawVelocity;
+  showroomState.lastInteract = performance.now();
+}
+
 /* ── React-visible slices: explode toggle + model readiness + labels ──── */
 
 const listeners = new Set<() => void>();

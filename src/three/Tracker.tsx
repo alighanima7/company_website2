@@ -7,7 +7,7 @@ import * as THREE from "three";
 import { PART_CALLOUTS } from "../content";
 import { useLocale } from "../locale";
 import { lerp, motionState, phase } from "../motion";
-import { FLAGS, timedFrame } from "../perf/probe";
+import { bumpDiag, FLAGS, noteDiag, timedFrame } from "../perf/probe";
 import { markStageLoading, markStageReady, showroomState } from "../showroom";
 import { useIsMobile, useViewportTier } from "../responsive";
 import { SCENE, useTheme } from "../theme";
@@ -44,11 +44,14 @@ const CYCLE = 11;
  *  Deliberately NOT called at module scope: that made every route fetch
  *  2.5 MB it might never render. */
 export function preloadTracker(): void {
+  bumpDiag("glbLoads");
   useGLTF.preload(MODEL_URL, false, true);
 }
 
 /** Evict the loader-cache entry (showroom's far-neighbor cleanup). */
 export function clearTracker(): void {
+  bumpDiag("glbClears");
+  noteDiag("lastClear", "tracker");
   useGLTF.clear(MODEL_URL);
 }
 

@@ -19,11 +19,19 @@ export type ViewportTier = "mobile" | "tablet" | "desktop";
 
 export const MOBILE_MAX_PX = 767;
 export const TABLET_MAX_PX = 1023;
+/** The product DETAIL page switches to its stacked phone layout here.
+ *  Wider than the 767 phone tier on purpose: the detail page's stacked
+ *  stage reads better than the side-by-side one well into tablet widths,
+ *  and the brief pins it at 820. */
+export const PHONE_LAYOUT_MAX_PX = 820;
 
 const canQuery = typeof window !== "undefined";
 const mobileQuery = canQuery ? window.matchMedia(`(max-width: ${String(MOBILE_MAX_PX)}px)`) : null;
 const tabletQuery = canQuery ? window.matchMedia(`(max-width: ${String(TABLET_MAX_PX)}px)`) : null;
 const coarseQuery = canQuery ? window.matchMedia("(pointer: coarse)") : null;
+const phoneLayoutQuery = canQuery
+  ? window.matchMedia(`(max-width: ${String(PHONE_LAYOUT_MAX_PX)}px)`)
+  : null;
 
 function currentTier(): ViewportTier {
   if (mobileQuery?.matches === true) return "mobile";
@@ -31,10 +39,16 @@ function currentTier(): ViewportTier {
   return "desktop";
 }
 
-export const viewport: { tier: ViewportTier; isMobile: boolean; coarse: boolean } = {
+export const viewport: {
+  tier: ViewportTier;
+  isMobile: boolean;
+  coarse: boolean;
+  phoneLayout: boolean;
+} = {
   tier: currentTier(),
   isMobile: mobileQuery?.matches ?? false,
   coarse: coarseQuery?.matches ?? false,
+  phoneLayout: phoneLayoutQuery?.matches ?? false,
 };
 
 const listeners = new Set<() => void>();
@@ -43,6 +57,7 @@ function refresh(): void {
   viewport.tier = currentTier();
   viewport.isMobile = viewport.tier === "mobile";
   viewport.coarse = coarseQuery?.matches ?? false;
+  viewport.phoneLayout = phoneLayoutQuery?.matches ?? false;
   listeners.forEach((listener) => {
     listener();
   });
@@ -51,6 +66,7 @@ function refresh(): void {
 mobileQuery?.addEventListener("change", refresh);
 tabletQuery?.addEventListener("change", refresh);
 coarseQuery?.addEventListener("change", refresh);
+phoneLayoutQuery?.addEventListener("change", refresh);
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
@@ -69,4 +85,23 @@ export function useViewportTier(): ViewportTier {
 
 export function useIsMobile(): boolean {
   return useViewportTier() === "mobile";
+}
+
+function getCoarse(): boolean {
+  return viewport.coarse;
+}
+
+/** Touch-class device. The render-resolution cap keys on THIS, not on the
+ *  width: a touch tablet in landscape is still a touch GPU. */
+export function useIsCoarse(): boolean {
+  return useSyncExternalStore(subscribe, getCoarse);
+}
+
+function getPhoneLayout(): boolean {
+  return viewport.phoneLayout;
+}
+
+/** True where the product detail page uses its stacked phone layout. */
+export function usePhoneLayout(): boolean {
+  return useSyncExternalStore(subscribe, getPhoneLayout);
 }

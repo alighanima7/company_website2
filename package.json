@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --port 4322",
     "models": "node scripts/optimize-models.mjs",
-    "posters": "node scripts/render-posters.mjs"
+    "posters": "node scripts/render-posters.mjs",
+    "check:launch": "node scripts/check-launch.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.6",

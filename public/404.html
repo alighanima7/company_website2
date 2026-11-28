@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+    <!-- A 404 is never indexable, in any environment. This is deliberately
+         NOT tied to PRELAUNCH_NOINDEX in vite.config.ts — it stays after
+         launch, so `npm run check:launch` ignores this file. -->
+    <meta name="robots" content="noindex, nofollow" />
+
+    <title>الصفحة غير موجودة — النخلة الأهلية الأمنية</title>
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         STANDALONE PAGE. Cloudflare Pages serves this with a real HTTP 404
+         for any unknown path. React is not running here, so it cannot use
+         the app's stylesheet (which is content-hashed) or the theme/locale
+         bootstrap (which would need an inline script and therefore a second
+         CSP hash).
+
+         Consequences, by design:
+           · NO scripts at all — the CSP stays simple.
+           · LIGHT THEME ONLY — the stored dark preference is unreadable
+             without a script.
+           · Bilingual: Arabic first, English stacked beneath it.
+
+         The tokens and font stack below are COPIED from src/styles.css
+         (:root light block, lines ~120-230, and the @font-face set at
+         lines ~33-118). That file is the source of truth — if the brand
+         palette changes there, update these few values to match.
+         ═══════════════════════════════════════════════════════════════════ -->
+    <style>
+      /* Only the faces this page actually renders: Arabic 400/700 and
+         Latin 400. Same files, same unicode-range split as styles.css. */
+      @font-face {
+        font-family: "IBM Plex Sans Arabic";
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url("/fonts/ibm-plex-sans-arabic-arabic-400-normal.woff2") format("woff2");
+        unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+08A0-08FF, U+200C-200E,
+          U+2010-2011, U+FB50-FDFF, U+FE70-FEFF;
+      }
+      @font-face {
+        font-family: "IBM Plex Sans Arabic";
+        font-style: normal;
+        font-weight: 700;
+        font-display: swap;
+        src: url("/fonts/ibm-plex-sans-arabic-arabic-700-normal.woff2") format("woff2");
+        unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+08A0-08FF, U+200C-200E,
+          U+2010-2011, U+FB50-FDFF, U+FE70-FEFF;
+      }
+      @font-face {
+        font-family: "IBM Plex Sans";
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url("/fonts/ibm-plex-sans-latin-400-normal.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+          U+02DC, U+2000-206F, U+20AC, U+2122, U+2212, U+FEFF, U+FFFD;
+      }
+
+      :root {
+        /* Light core — verbatim from styles.css */
+        --bg: #f0f6f4; /* cool paper */
+        --text: #19586a; /* brand teal, 7.26:1 on paper */
+        --muted: rgba(25, 88, 106, 0.86); /* 5.20:1 composite */
+        --heading: #0c3845; /* deep teal, 11.51:1 */
+        --line: rgba(25, 88, 106, 0.3); /* decorative hairline */
+        --btn-bg: #0c3845;
+        --btn-ink: #f0f6f4; /* 11.51:1 on the button */
+        --font-ar: "IBM Plex Sans Arabic", "IBM Plex Sans", Tahoma, system-ui, sans-serif;
+        --font-en: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 32px 24px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font-ar);
+        line-height: 1.85;
+        -webkit-font-smoothing: antialiased;
+      }
+      main {
+        width: 100%;
+        max-width: 560px;
+        text-align: center;
+      }
+      .brand {
+        margin: 0 0 28px;
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+        color: var(--heading);
+      }
+      .code {
+        margin: 0;
+        font-size: clamp(56px, 14vw, 104px);
+        font-weight: 700;
+        line-height: 1;
+        color: var(--heading);
+      }
+      /* Arabic block (primary) */
+      .ar h1 {
+        margin: 14px 0 6px;
+        font-size: clamp(21px, 4.4vw, 29px);
+        font-weight: 700;
+        line-height: 1.4;
+        color: var(--heading);
+      }
+      .ar p {
+        margin: 0;
+        font-size: 15px;
+        color: var(--muted);
+      }
+      /* English block, stacked beneath and explicitly LTR so the mixed
+         direction never reflows the Arabic above it. */
+      .en {
+        margin-top: 22px;
+        padding-top: 22px;
+        border-top: 1px solid var(--line);
+        font-family: var(--font-en);
+        line-height: 1.6;
+      }
+      .en h2 {
+        margin: 0 0 4px;
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--heading);
+      }
+      .en p {
+        margin: 0;
+        font-size: 14px;
+        color: var(--muted);
+      }
+      .home {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 48px;
+        margin-top: 30px;
+        padding: 12px 26px;
+        border-radius: 2px;
+        background: var(--btn-bg);
+        color: var(--btn-ink);
+        font-family: var(--font-ar);
+        font-size: 15px;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .home:focus-visible {
+        outline: 2px solid var(--heading);
+        outline-offset: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="brand">النخلة الأهلية الأمنية &middot; ALNAKHLAH SECURITY</p>
+
+      <p class="code">404</p>
+
+      <div class="ar">
+        <h1>الصفحة غير موجودة</h1>
+        <p>الرابط الذي طلبته غير متوفر أو تم نقله.</p>
+      </div>
+
+      <div class="en" lang="en" dir="ltr">
+        <h2>Page not found</h2>
+        <p>The page you requested does not exist or has moved.</p>
+      </div>
+
+      <a class="home" href="/">العودة إلى الرئيسية &middot; Home</a>
+    </main>
+  </body>
+</html>

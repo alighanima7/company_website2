@@ -15,7 +15,8 @@
  * doesn't wire it) — this script attaches it before compressing, so the
  * brand elements can glow under the dark theme's bloom.
  */
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
+import { dirname } from "node:path";
 
 import { NodeIO } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
@@ -63,11 +64,15 @@ const MODELS = [
   // Aggressive FMC130 variant: the label shell's dense relief holds ~286k
   // verts under the default 0.1% error cap (→3MB file) — a 1% cap plus
   // 512px textures trades micro-relief for a much smaller download.
-  // fmc130.glb above stays the high-quality fallback; FmcDevice's CONFIGS
-  // url decides which one ships.
+  //
+  // NOT emitted into public/: nothing loads it (FmcDevice's CONFIGS points
+  // at fmc130.glb), so shipping it meant deploying ~2.7MB of dead weight.
+  // It now lands in the gitignored build/model-variants/ as an evaluation
+  // artifact. To actually use it, copy it into public/models/ and point
+  // CONFIGS.fmc130.url at it.
   {
     input: "3d_model/FMC130/base_basic_pbr.glb",
-    output: "public/models/fmc130-lite.glb",
+    output: "build/model-variants/fmc130-lite.glb",
     simplifyError: 0.01,
     textureSize: 512,
   },
@@ -120,6 +125,9 @@ for (const model of MODELS) {
     meshopt({ encoder: MeshoptEncoder, level: "high" }),
   );
 
+  // The evaluation variants land outside public/, in a directory that may
+  // not exist yet.
+  await mkdir(dirname(model.output), { recursive: true });
   await io.write(model.output, document);
   const { size } = await import("node:fs").then((fs) => fs.promises.stat(model.output));
   console.log(`${model.input} → ${model.output} (${(size / 1048576).toFixed(2)} MB)`);

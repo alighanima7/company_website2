@@ -1,5 +1,29 @@
 # NNS 3D Platform
 
+> ## ⚠️ THIS README IS OUTDATED — except the final section
+>
+> Everything between here and **"Deployment and launch"** describes an
+> architecture that **no longer exists**, and is pending a rewrite:
+>
+> - It claims **GSAP ScrollTrigger + Lenis**. Neither is a dependency any
+>   more — check `package.json`. Pages scroll natively and the 3D scenes run
+>   on a clock (see the note at the top of `src/motion.ts`).
+> - It describes **one continuous ~7-viewport scroll film with phases
+>   01–07** and `syncPhases()` in `src/scroll.ts`. That file is gone. The app
+>   is now a **four-route hash-routed multi-page site** (`#/`, `#/products`,
+>   `#/support`, `#/requests-about`) behind one persistent 3D stage, plus a
+>   non-scrolling products **showroom** and per-product detail views.
+> - The **colour system described below is not the one in use.** It lists
+>   Brown-Gray `#1E1A17`, Bright Sage `#6B8E6F`, Bright Terracotta `#DD8D65`,
+>   Soft Pastel Pink `#F3C3C8` and Vibrant Mint `#22E3A2`. The real palette is
+>   teal `#19586A`, palm green `#198948`, paper `#F0F6F4` and teal-black
+>   `#0B1619` — see the header comment in `src/styles.css`, which is accurate.
+> - It documents no asset pipeline. Two scripts exist: `npm run models` and
+>   `npm run posters`.
+>
+> **The "Deployment and launch" section at the bottom is current and
+> maintained.** Trust that one.
+
 The NNS landing page as a cinematic, scroll-driven 3D experience
 (React Three Fiber + GSAP ScrollTrigger + Lenis). A fully standalone
 Vite project — no monorepo, no workspace, no external references;
@@ -106,3 +130,189 @@ terracotta in dark), side edge flares inside the glass, and a gentle
 rim-luminosity breathing/hover shift (opacity-only, stilled under
 reduced motion). Anything passing beneath the glass — callouts included —
 diffuses into soft glow, which is the intended smoked-glass read.
+
+---
+
+# Deployment and launch
+
+**This section is current and maintained** (unlike the rest of this README).
+
+Final host: **Cloudflare Pages** — static output, no server, no rewrites.
+Because the app is a hash router, every real URL is `/`; deep links like
+`#/products/fmc130` are fragments the server never sees, so nothing needs
+SPA-rewrite rules. `vercel.json` exists only to mirror the same rules on a
+Vercel preview for phone testing.
+
+Build command: `npm run build` · Output directory: `dist`
+
+## The four files that control deployment
+
+| File | Read by | Controls |
+| --- | --- | --- |
+| `vite.config.ts` | the build | `PRELAUNCH_NOINDEX`, `SITE_ORIGIN` |
+| `public/_headers` | **Cloudflare Pages** | all HTTP headers (primary) |
+| `vercel.json` | Vercel preview only | the same headers, mirrored |
+| `public/404.html` | the host | the real 404 page |
+
+`public/_headers` and `public/404.html` are copied verbatim into `dist/` by
+Vite's `publicDir` copy — no configuration needed.
+
+**`_headers` and `vercel.json` must stay in sync by hand.** After editing
+either, run:
+
+```bash
+npm run check:launch
+```
+
+It is read-only, exits non-zero on any disagreement, and checks the two
+things that otherwise fail silently: a half-finished launch, and a stale CSP
+hash.
+
+## Caching
+
+| Path | Policy | Why |
+| --- | --- | --- |
+| `/assets/*` | `max-age=31536000, immutable` | Vite content-hashes these — a change means a new filename, so there is no staleness risk |
+| `/`, `/index.html`, `/404.html` | `max-age=0, must-revalidate` | the shell is the only file that knows the current asset hashes |
+| `/fonts/*` | `max-age=2592000` + `ACAO: *` | unhashed but stable; ACAO keeps the `crossorigin` preloads clean |
+| `/models/*`, `/posters/*`, `/images/*`, `/brand/*`, favicons, `og.jpg` | `max-age=86400, stale-while-revalidate=86400` | unhashed **and** expected to be replaced |
+
+**The trade-off on that last row:** after replacing a model or poster, a
+*returning* visitor can keep the old file for up to 24 h, and in the worst
+case see it once more during the stale window before the background
+revalidation lands — so **up to ~48 h**. First-time visitors always get the
+new file. The alternative (`max-age=0`) costs a network round-trip for every
+asset on every visit, including multi-megabyte GLBs.
+
+**To make those paths `immutable` later** — the proper fix once the real
+models land: give them content-hashed filenames. Have
+`scripts/optimize-models.mjs` and `scripts/render-posters.mjs` emit
+`fmc130.a1b2c3d4.glb` plus a generated `models.manifest.json`, and have
+`CONFIGS` in `src/three/FmcDevice.tsx` and `posterSrc()` read the manifest
+instead of hardcoding paths. Then these directories can go `immutable` with
+no staleness at all. A `?v=2` query string is **not** a substitute — it does
+not change the cache key on every CDN.
+
+## CSP — currently Report-Only
+
+The CSP ships as `Content-Security-Policy-Report-Only`, which reports
+violations to the browser console **without blocking anything**. Verified
+with zero violations across 68 cells (17 routes × light/dark × AR/EN) with
+models, posters and WebGL all working.
+
+Every non-obvious source is justified in a comment block in
+`public/_headers`. The two that are load-bearing and non-obvious:
+
+- **`img-src blob:`** — GLTFLoader turns the `EXT_texture_webp` textures
+  inside the GLBs into blob URLs.
+- **`connect-src blob:`** — those same textures are then *fetched* from
+  those blob URLs, which counts as `connect-src`, not `img-src`. Omitting
+  this produced **632 violations**; it was found only because the policy was
+  Report-Only first.
+
+Not needed: `https://www.gstatic.com`. That is drei's default Draco decoder
+CDN and it is dead code here — every `useGLTF` call passes `useDraco: false`
+and all seven GLBs use meshopt, not Draco. **If Draco is ever enabled, the
+CSP must gain it in `script-src` and `connect-src`.**
+
+### Editing the inline theme bootstrap invalidates the CSP
+
+`index.html` contains an inline script (the zero-flash theme/locale
+bootstrap). The CSP allows it by **SHA-256 hash**. Change even one byte of
+that script and the hash no longer matches — under Report-Only that is a
+console warning; once enforcing, it is a **blank page**.
+
+`npm run check:launch` recomputes the hash and prints the correct
+replacement value. Paste it into **both** `public/_headers` and
+`vercel.json`.
+
+### To switch CSP from Report-Only to enforcing
+
+1. Deploy a Cloudflare Pages **preview** with the current Report-Only policy.
+2. Visit every route in both themes and both locales with DevTools open:
+   home, `#/products`, `?p=` for all six products, all six
+   `#/products/<id>`, `#/support`, `#/requests-about`, and a bad hash.
+3. Confirm **zero** CSP messages in the console, and that models render
+   textured (not plain grey), posters appear, and the theme toggle works.
+4. Only then rename the header `Content-Security-Policy-Report-Only` to
+   `Content-Security-Policy` in **both** files, and re-verify on a preview
+   before promoting to production.
+5. If `worker-src blob:` never reported anything, it can be dropped at the
+   same time — it is defensive cover for drei's unused DRACOLoader.
+
+## Changing the site origin
+
+One line, `SITE_ORIGIN` in `vite.config.ts`. It is substituted into
+`__SITE_ORIGIN__` in `index.html` at build **and** dev time, feeding
+`<link rel="canonical">`, `og:url`, `og:image` and `twitter:image`. Never
+hand-edit those tags. No trailing slash (`check:launch` enforces this).
+
+## Launch checklist — removing the search block
+
+The site is currently **blocked from search engines by three mechanisms**.
+Removing them is **three edits plus a verification**:
+
+1. **`vite.config.ts`** — set `const PRELAUNCH_NOINDEX = false;`
+   (this alone handles `<meta name="robots">` and `robots.txt`)
+2. **`public/_headers`** — delete the whole block fenced by
+   `PRELAUNCH NOINDEX … END PRELAUNCH NOINDEX BLOCK`
+3. **`vercel.json`** — delete the **first** entry in the `headers` array
+   (the one whose only header is `X-Robots-Tag`)
+4. **Verify:**
+   ```bash
+   npm run check:launch   # must print PASS and "Current state: LAUNCHED"
+   npm run build
+   ```
+5. After deploying, confirm on the live URL:
+   ```bash
+   curl -sI https://<domain>/ | grep -i x-robots-tag   # expect NO output
+   curl -s  https://<domain>/robots.txt                # expect "Allow: /"
+   ```
+
+`public/404.html` keeps its `noindex` meta permanently — a 404 should never
+be indexed. `check:launch` deliberately ignores that file.
+
+Also worth doing at launch: add a `sitemap.xml` and a `Sitemap:` line to the
+generated `robots.txt` in `vite.config.ts`. Note that hash routing limits
+what indexing can achieve at all — crawlers only ever fetch `/`, so the
+individual routes are not separately indexable. Moving to History-API
+routing is the only real fix, and it would require SPA-rewrite rules.
+
+## Cloudflare dashboard settings to check
+
+Several Cloudflare features rewrite HTML or inject scripts, which **breaks
+the hash-based CSP and can break the app**. Verify these for the Pages
+project / zone:
+
+| Setting | Required | Why |
+| --- | --- | --- |
+| **Speed → Optimization → Rocket Loader** | **OFF** | injects an inline script the hash CSP will reject, and reorders script execution, which can break React's boot |
+| **Auto Minify / any HTML modification** | **OFF** | rewriting `index.html` changes the inline bootstrap's bytes and **invalidates the CSP hash** |
+| **Scrape Shield → Email Obfuscation** | **OFF** | rewrites `mailto:` links and injects `/cdn-cgi/scripts/.../email-decode.min.js` — breaks the CSP *and* the contact/quote flow, which depends on `mailto:` as its only transport |
+| **Web Analytics** | optional | if enabled, the CSP must gain `script-src https://static.cloudflareinsights.com` and `connect-src https://cloudflareinsights.com` in **both** config files |
+
+## Testing headers locally
+
+The deployed headers come from `public/_headers`, which `vite preview` does
+**not** apply. To exercise them for real, use Cloudflare's own tooling:
+
+```bash
+npm i -D wrangler
+npm run build
+npx wrangler pages dev dist --port 8788
+```
+
+That is the only local setup that uses Cloudflare's actual `_headers`
+parser. `wrangler` is **not** currently a dependency — install it only if
+you want this.
+
+Either way, a Cloudflare Pages **preview deployment** is the authoritative
+check. Verify with:
+
+```bash
+curl -sI https://<preview>/                        # noindex, no-cache, CSP, security headers
+curl -sI https://<preview>/assets/index-<hash>.js  # immutable, 1 year
+curl -sI https://<preview>/models/fmc130.glb       # 1 day + stale-while-revalidate
+curl -sI https://<preview>/fonts/ibm-plex-sans-arabic-arabic-400-normal.woff2
+curl -sI https://<preview>/no-such-path            # expect HTTP 404 + the branded page
+```

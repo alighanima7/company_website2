@@ -3,6 +3,10 @@ dist/
 *.log
 .DS_Store
 
+# Asset-pipeline evaluation artifacts (npm run models). Variants that are
+# NOT shipped land here instead of public/ — see scripts/optimize-models.mjs.
+build/
+
 # Raw 3D source exports (40–46MB each) — the optimized web asset lives at
 # public/models/tracker.glb; keep the originals out of the repo history.
 3d_model/

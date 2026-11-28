@@ -1,0 +1,118 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Cloudflare Pages response headers.  PRIMARY mechanism — this is the real
+# host.  vercel.json mirrors these rules for the Vercel phone-test preview;
+# if you change anything here, change it there too and run:
+#
+#     npm run check:launch
+#
+# Format: a line starting with "/" is a path pattern; the indented lines
+# under it are headers for that pattern.  Every matching pattern applies, so
+# Cache-Control is deliberately set ONLY in the per-path blocks below and
+# never in /* — that way no response ever receives it twice.
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+# ╔═════════════════════════════════════════════════════════════════════════╗
+# ║ PRELAUNCH NOINDEX — DELETE THIS WHOLE BLOCK AT LAUNCH                   ║
+# ║ (down to the END marker).  See "Deployment and launch" in README.md.    ║
+# ║ Also: flip PRELAUNCH_NOINDEX in vite.config.ts and delete the matching  ║
+# ║ block in vercel.json, then run `npm run check:launch`.                  ║
+# ╚═════════════════════════════════════════════════════════════════════════╝
+/*
+  X-Robots-Tag: noindex, nofollow
+# ╔═════════════════════════════════════════════════════════════════════════╗
+# ║ END PRELAUNCH NOINDEX BLOCK                                             ║
+# ╚═════════════════════════════════════════════════════════════════════════╝
+
+
+# ── Security (all responses) ───────────────────────────────────────────────
+#
+# CSP is Content-Security-Policy-REPORT-ONLY on purpose: it reports
+# violations to the browser console without blocking anything, so a mistake
+# cannot take the site down.  Do not switch it to the enforcing header until
+# a full pass over every route shows zero violations — see README.
+#
+# Why each non-obvious source is needed (all verified against the build):
+#   'sha256-N50hu…'    the inline zero-flash theme bootstrap in index.html.
+#                      EDITING THAT SCRIPT CHANGES THIS HASH — check:launch
+#                      recomputes it and fails if they drift.
+#   'wasm-unsafe-eval' meshopt runs WebAssembly.instantiate to decode the
+#                      GLBs (all 7 require EXT_meshopt_compression).
+#   style-src unsafe-inline
+#                      React writes element style attributes (and drei's
+#                      <Html> portals do too); there is no way around it
+#                      without rewriting the render layer.
+#   img-src blob:      GLTFLoader turns the EXT_texture_webp textures that
+#                      live inside the GLBs into blob: URLs.  Omitting this
+#                      makes every model render untextured.
+#   connect-src blob:  the SAME textures are then FETCHED from those blob
+#                      URLs, which counts as connect-src, not img-src.
+#                      Measured: 632 report-only violations across 68
+#                      route/theme/locale cells with this missing.
+#   worker-src blob:   defensive only.  drei bundles DRACOLoader (which
+#                      builds its worker from a blob), but every useGLTF
+#                      call passes useDraco:false and no GLB requires Draco,
+#                      so this should never fire.  If Report-Only stays
+#                      clean, it can be dropped when enforcing.
+# NOT needed: https://www.gstatic.com.  That is drei's default Draco decoder
+# CDN and it is dead code here.  If Draco is ever enabled, this CSP must
+# gain it in script-src and connect-src.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()
+  Cross-Origin-Opener-Policy: same-origin
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'sha256-N50huLSFyDoSNXgAN9eo1/u6rAaZ3bYt0vANTLOA30s=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+
+
+# ── The app shell: never cache ─────────────────────────────────────────────
+# It is the only file that knows the current /assets/* hashes, so a stale
+# copy would pin a visitor to an old build.
+/
+  Cache-Control: public, max-age=0, must-revalidate
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+/404.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+
+# ── Vite output: content-hashed, so cache forever ──────────────────────────
+# A changed file always gets a new filename, so there is no staleness risk.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+
+# ── Self-hosted fonts: unhashed but stable ─────────────────────────────────
+# 30 days.  ACAO matches the behaviour these files have today and keeps the
+# crossorigin preloads in index.html clean.
+/fonts/*
+  Cache-Control: public, max-age=2592000
+  Access-Control-Allow-Origin: *
+
+
+# ── Unhashed and expected to be replaced: moderate ─────────────────────────
+# 1 day fresh, then served stale for up to 1 more day while revalidating in
+# the background.  Worst case a RETURNING visitor sees a replaced model or
+# poster up to ~48h late; first-time visitors always get the new file.
+# To move these to immutable, give them content-hashed filenames first
+# (see README — needs the generator scripts to emit a manifest).
+/models/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=86400
+/posters/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=86400
+/images/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=86400
+/brand/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=86400
+
+
+# ── Icons and the social card: unhashed, pending real brand assets ─────────
+/favicon.ico
+  Cache-Control: public, max-age=86400, stale-while-revalidate=86400
+/favicon.svg
+  Cache-Control: public, max-age=86400, stale-while-revalidate=86400
+/apple-touch-icon.png
+  Cache-Control: public, max-age=86400, stale-while-revalidate=86400
+/og.jpg
+  Cache-Control: public, max-age=86400, stale-while-revalidate=86400

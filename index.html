@@ -34,30 +34,40 @@
         } catch (e) {}
       })();
     </script>
+    <!-- Default-locale (Arabic) metadata. App.tsx re-stamps document.title
+         per route and locale after hydration; this pair is what crawlers and
+         the first paint see. -->
     <meta
       name="description"
-      content="النخلة الأهلية الأمنية — تجربة تفاعلية ثلاثية الأبعاد (نسخة تجريبية v2) لحلول تتبع المركبات وإدارة الأساطيل وإنترنت الأشياء."
+      content="حلول احترافية لإدارة الأساطيل وتتبع المركبات والكاميرات الذكية وإنترنت الأشياء — تماشيًا مع رؤية المملكة 2030."
     />
-    <title>النخلة الأمنية — NNS v2</title>
+    <title>النخلة الأهلية الأمنية — إدارة الأساطيل وتتبع المركبات</title>
+
+    <!-- Every route is a hash fragment, so the canonical URL is the origin
+         root. __SITE_ORIGIN__ is substituted by vite.config.ts. -->
+    <link rel="canonical" href="__SITE_ORIGIN__/" />
 
     <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
-    <!-- Social cards. og:image is site-relative: swap in the absolute
-         production URL (crawlers require it) once the domain is final. -->
+    <!-- Social cards. Crawlers require ABSOLUTE urls for og:url / og:image /
+         twitter:image — __SITE_ORIGIN__ comes from the single SITE_ORIGIN
+         constant in vite.config.ts, so the custom domain is a one-line
+         change there (never edit these by hand). -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="النخلة الأمنية — ALNAKHLAH SECURITY" />
-    <meta property="og:title" content="النخلة الأمنية — تجربة ثلاثية الأبعاد" />
+    <meta property="og:title" content="النخلة الأهلية الأمنية — تحكم في كل حركة" />
     <meta
       property="og:description"
       content="حلول احترافية لإدارة الأساطيل وتتبع المركبات والكاميرات الذكية وإنترنت الأشياء — تماشيًا مع رؤية المملكة 2030."
     />
-    <meta property="og:image" content="/og.jpg" />
+    <meta property="og:url" content="__SITE_ORIGIN__/" />
+    <meta property="og:image" content="__SITE_ORIGIN__/og.jpg" />
     <meta property="og:locale" content="ar_SA" />
     <meta property="og:locale:alternate" content="en_US" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="/og.jpg" />
+    <meta name="twitter:image" content="__SITE_ORIGIN__/og.jpg" />
     <!-- Self-hosted IBM Plex (woff2, subset per script) — @font-face lives
          in styles.css. Preload only the default locale's critical pair;
          Latin/mono and the 600s arrive on demand via unicode-range. -->
